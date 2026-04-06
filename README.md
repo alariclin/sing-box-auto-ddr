@@ -11,7 +11,7 @@ Sing-box 2026 终极一键部署脚本。
     * **Tier 1:** 无域名环境自动自愈，生成高阶平庸域名自签证书。
 * **Salamander 混淆:** 强制注入 Hysteria 2 熵混淆算法。
 * **内核级调优:** 强制激活 BBR、物理时钟强制对齐、TCP Fast Open 优化。
-* ** 多协议集成：** VLESS-REALITY （TCP） + Hysteria 2 （UDP） + SS-2022 （落地）。  
+* 多协议集成： VLESS-REALITY （TCP） + Hysteria 2 （UDP） + SS-2022 （落地）。    
 * **故障自愈:** 自动解除 APT/DPKG 锁死，自动修复机房 DNS 污染。
 * **双栈支持:** 完美支持 IPv4/IPv6 协议栈，适配纯 IPv6 机器。
 
