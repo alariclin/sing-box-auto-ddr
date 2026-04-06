@@ -4,10 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[！[ 唱盒 ]（https://img.shields.io/badge/Core-Sing--box-blue）]（https://github.com/SagerNet/sing-box） 
 
-[！[ 语言：双语 （https://img.shields.io/badge/Language-Bilingual-green）]（#english 版 ）  
-[![OS: Linux](https://img.shields.io/badge/OS-Linux-orange)](#)
 
 Sing-box 2026 终极一键部署脚本。
 
