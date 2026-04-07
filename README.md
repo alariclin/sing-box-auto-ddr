@@ -1,7 +1,7 @@
 # Aio-box
 
 - **[中文说明](#-中文说明) | [English Description](#-english-description)**
-- **致谢 / Credits:** 感谢 [Xray-core](https://github.com/XTLS/Xray-core) 与 [Sing-box](https://github.com/SagerNet/sing-box) 提供的强大网络路由核心。
+- **致谢 / Credits:** 感谢 [Xray-core](https://github.com/XTLS/Xray-core) 与 [Sing-box](https://github.com/SagerNet/sing-box) 提供的强大网络路由与加密核心。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Stars](https://img.shields.io/github/stars/alariclin/aio-box?style=flat&color=yellow)](https://github.com/alariclin/aio-box/stargazers)
@@ -13,30 +13,27 @@
 <a name="-中文说明"></a>
 ## 中文说明
 
-**Aio-box** 是一款专为网络安全与路由优化打造的“双核·高可用”一键部署环境。本项目聚焦于 **Xray-core (v26+)** 与 **Sing-box (Testing)** 的原生深度集成，提供物理级防封锁与系统级并发性能优化。
+**Aio-box** 是一款专为网络安全、强隐私保护与路由优化打造的“双核·高可用”一键部署环境。本项目聚焦于 **Xray-core (v26+)** 与 **Sing-box (Testing)** 的原生深度集成，提供物理级防封锁与系统级并发性能优化。
 
 ### ✨ 核心特性
-* **最新内核原生支持**: 完美适配 Xray-core v26.3.27 的原生 Hysteria 2 支持，修复所有旧版配置冲突。
-* **Testing 分支特性**: 支持 Sing-box 原生端口跳跃 (Port Hopping) 与 Chrome Root Store 指纹强校验。
-* **三重资源保障**: 优先尝试官方源下载，自动回退至个人备份仓库源，并支持完全本地离线缓存重装。
-* **物理防封锁**: 彻底剥离高危 Apple/iCloud 伪装域名，全面转向微软分发网络；内置 uTLS 客户端指纹自动适配。
-* **高可用本地化**: `sb` 快捷指令本地化物理执行，内置 OTA 热更新模块，彻底免疫远程网络波动。
+* **TCP/UDP 443 双栈复用**: 完美实现 VLESS (TCP) 与 Hysteria 2 (UDP) 共享物理 443 端口，极致伪装。
+* **原生防封锁引擎**: Xray v26.3.27 原生支持，内置 Sing-box 端口跳跃 (NAT Hopping) 与 Chrome 指纹强校验。
+* **动态 SNI 与自签发证书**: 支持自定义私有域名，并自动生成防探测的 100 年期自签发安全证书。
+* **高可用本地化**: `sb` 快捷指令本地化物理执行，自带离线缓存，彻底免疫远程网络波动。
+* **自动提权与防呆设计**: 脚本自动获取 Root 权限，屏蔽退格键乱码与误触崩溃，提供流畅的极客交互。
 
 ### 🚀 快速部署
 
-**⚠️ 前置要求：** 请务必先执行以下指令切换至 Root 用户：
-```bash
-sudo su -
-```
+无需手动切换用户，请直接复制以下一键安装指令到终端执行：
 
-获取权限后，执行一键安装指令：
+**全球高速通道 (推荐海外机器使用):**
 ```bash
-sudo bash -c "$(curl -Ls https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh)"
+sudo bash -c "$(curl -Ls (https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh))"
 ```
 
 **分发加速镜像 (中国大陆机器推荐):**
 ```bash
-bash <(curl -Ls https://ghp.ci/https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh)
+sudo bash -c "$(curl -Ls (https://ghp.ci/https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh))"
 ```
 
 #### ⚡ 全局管理
