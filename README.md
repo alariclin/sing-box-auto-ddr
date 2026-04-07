@@ -72,7 +72,11 @@ sb
 ```bash
 sudo bash -c "$(curl -Ls https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh)"
 ```
-
+#### ⚡ Global Management
+Once installation is complete, simply enter the following command in the terminal to instantly launch the Control Panel (offline launch supported):
+```bash
+sb
+```
 ### 📂 Architecture Overview
 | Engine Base | Target Use Case | Technical Highlights |
 | :--- | :--- | :--- |
