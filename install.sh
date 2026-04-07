@@ -2,7 +2,7 @@
 # ====================================================================
 # All-in-One Duo Ultimate Console [Dual-Core Omni | Shortcut 'sb']
 # Features: TCP-Vision, YAML, Local Cache, Smart Uninstall, Key-Guard
-# Author: Nobody | Version: 2026.04.Apex
+# Author: Nbody | Version: 2026.04.Apex
 # ====================================================================
 
 set -e
