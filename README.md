@@ -79,15 +79,6 @@ sudo bash -c "$(curl -Ls https://raw.githubusercontent.com/alariclin/aio-box/mai
 | **🛡️ Xray-core** | Strong Privacy | `TCP-Vision` flow control, REALITY dynamic padding |
 | **⚡ Sing-box** | High Concurrency | ACME automation, Port-hopping, Multiplexing |
 
-### 🛠️ System Management
-* **[Option 9] Quota Guard: Precision API bandwidth tracking with an automated network killswitch.
-* **[Option 10] Diagnostics: Interactive tests for IP Reputation, Streaming Unlock, and Global Speedtests.
-* **[Option 11] VPS Tuning: Unlock kernel concurrency (Ulimit) and optimize TCP BBR congestion stacks.
-* **[Option 13] Export Topology: Instantly render Universal URIs and Clash Meta (Mihomo) YAML structures.
-* **[Option 14] OTA Update: Force-sync the local dashboard instance with the latest cloud repository.
-* **[Option 15] Clean Uninstall: Smart uninstaller with the option to complete purge or keep offline caches.
----
-
 ## ⚠️ 系统要求 / System Requirements
 * **OS**: Debian 10+, Ubuntu 20.04+, CentOS 8+, AlmaLinux.
 * **Init System**: Systemd is strictly required for daemon persistence.
