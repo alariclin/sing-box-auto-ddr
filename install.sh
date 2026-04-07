@@ -16,7 +16,6 @@ trap 'echo -e "\n${RED}[!] 触发安全自愈，系统中断并回滚 / Rollback
 setup_shortcut() {
     if [[ ! -f /usr/local/bin/sb ]]; then
         echo '#!/usr/bin/env bash' > /usr/local/bin/sb
-        # [已修复]: 指向正确的 all-in-one-duo 仓库
         echo 'bash <(curl -Ls https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh)' >> /usr/local/bin/sb
         chmod +x /usr/local/bin/sb
     fi
@@ -195,7 +194,6 @@ install_xray() {
             RESOLVED_IP=$(curl -sH "accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=$USER_DOMAIN&type=$DNS_TYPE" | jq -r '.Answer[0].data' || echo "")
             if [[ "$RESOLVED_IP" == "$PUBLIC_IP" ]]; then
                 curl -s https://get.acme.sh | sh >/dev/null 2>&1; 
-                # [已优化]: 强制注册账户防止 ACME 拒绝签发
                 ~/.acme.sh/acme.sh --register-account -m "ddr@$USER_DOMAIN" --server letsencrypt >/dev/null 2>&1
                 ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt >/dev/null 2>&1
                 if ~/.acme.sh/acme.sh --issue -d "$USER_DOMAIN" --standalone -k ec-256; then
@@ -288,7 +286,6 @@ install_singbox() {
             RESOLVED_IP=$(curl -sH "accept: application/dns-json" "https://cloudflare-dns.com/dns-query?name=$USER_DOMAIN&type=$DNS_TYPE" | jq -r '.Answer[0].data' || echo "")
             if [[ "$RESOLVED_IP" == "$PUBLIC_IP" ]]; then
                 curl -s https://get.acme.sh | sh >/dev/null 2>&1;
-                # [已优化]: 强制注册账户防止 ACME 拒绝签发
                 ~/.acme.sh/acme.sh --register-account -m "ddr@$USER_DOMAIN" --server letsencrypt >/dev/null 2>&1
                 ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt >/dev/null 2>&1
                 if ~/.acme.sh/acme.sh --issue -d "$USER_DOMAIN" --standalone -k ec-256; then
@@ -385,11 +382,11 @@ manage_links() {
     clear; source /etc/ddr/.env 2>/dev/null || { echo "未安装"; sleep 2; return; }
     echo -e "${YELLOW}--- 节点订阅链接 / Node Links ---${NC}"
     if [[ "$CORE" == "xray" ]]; then
-        if grep -q "vless-in" /usr/local/etc/xray/config.json; then echo -e "${CYAN}[ Xray VLESS-xhttp-Reality ]${NC}\nvless://$UUID@$LINK_IP:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=chrome&pbk=$PBK&sid=$SID&type=xhttp#Xray-xhttp\n"; fi
+        if grep -q "vless-in" /usr/local/etc/xray/config.json; then echo -e "${CYAN}[ Xray VLESS-xhttp-Reality ]${NC}\nvless://$UUID@$LINK_IP:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$REALITY_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=xhttp#Xray-xhttp\n"; fi
         if grep -q "hy2-in" /usr/local/etc/xray/config.json; then echo -e "${CYAN}[ Xray Hysteria2 (Salamander) ]${NC}\nhy2://$HY2_PASS@$LINK_IP:8443?insecure=1&sni=$HY2_SNI&mport=20000-50000&obfs=salamander&obfs-password=$HY2_OBFS#Xray-Hy2\n"; fi
         if grep -q "ss-in" /usr/local/etc/xray/config.json; then echo -e "${CYAN}[ Xray SS-2022 ]${NC}\nss://$(echo -n "2022-blake3-aes-128-gcm:${SS_SIP_CORE}" | base64 -w 0)@$LINK_IP:2053#Xray-SS\n"; fi
     else
-        if grep -q "vless-in" /etc/sing-box/config.json; then echo -e "${GREEN}[ Sing-box VLESS-Reality ]${NC}\nvless://$UUID@$LINK_IP:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$SNI&fp=chrome&pbk=$PBK&sid=$SID&type=tcp#SB-Reality\n"; fi
+        if grep -q "vless-in" /etc/sing-box/config.json; then echo -e "${GREEN}[ Sing-box VLESS-Reality ]${NC}\nvless://$UUID@$LINK_IP:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$REALITY_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#SB-Reality\n"; fi
         if grep -q "hy2-in" /etc/sing-box/config.json; then
             if [[ "$HY2_INSECURE_FLAG" == "0" ]]; then echo -e "${GREEN}[ Sing-box Hysteria 2 (Real CA) ]${NC}\nhy2://$HY2_PASS@$LINK_IP:443?sni=$HY2_SNI&mport=20000-50000&obfs=salamander&obfs-password=$HY2_OBFS#SB-Hy2-CA\n"
             else echo -e "${GREEN}[ Sing-box Hysteria 2 (Self-Signed) ]${NC}\nhy2://$HY2_PASS@$LINK_IP:443?insecure=1&sni=$HY2_SNI&mport=20000-50000&obfs=salamander&obfs-password=$HY2_OBFS#SB-Hy2-Self\n"; fi
@@ -452,7 +449,6 @@ while true; do
         15) 
             systemctl stop xray sing-box 2>/dev/null || true
             systemctl disable xray sing-box 2>/dev/null || true
-            # [已优化]: 彻底物理清空遗留证书和配置文件，做到 100% 无痕
             rm -rf /usr/local/etc/xray /etc/sing-box /etc/ddr /usr/local/bin/xray /usr/local/bin/sing-box /usr/local/bin/ddr-quota.sh /usr/local/bin/sb ~/.acme.sh /etc/sysctl.d/99-ddr-tune.conf
             sysctl --system >/dev/null 2>&1 || true
             crontab -l 2>/dev/null | grep -v 'ddr-quota.sh' | crontab -
