@@ -1,11 +1,12 @@
 # Aio-box
 
 - **[中文说明](#-中文说明) | [English Description](#-english-description)**
-- **致谢 / Credits:** 感谢 [Xray-core](https://github.com/XTLS/Xray-core) 与 [Sing-box](https://github.com/SagerNet/sing-box) 提供的强大路由核心。
+- **致谢 / Credits:** 感谢 [Xray-core](https://github.com/XTLS/Xray-core) 与 [Sing-box](https://github.com/SagerNet/sing-box) 提供的强大网络路由核心。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![GitHub Stars](https://img.shields.io/github/stars/alariclin/aio-box?style=flat&color=yellow)](https://github.com/alariclin/aio-box/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/alariclin/aio-box?style=flat&color=orange)](https://github.com/alariclin/aio-box/network/members)
+[![GitHub Issues](https://img.shields.io/github/issues/alariclin/aio-box?style=flat&color=red)](https://github.com/alariclin/aio-box/issues)
 
 ---
 
@@ -30,19 +31,31 @@ sudo su -
 
 获取权限后，执行一键安装指令：
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh)
+bash <(curl -Ls [https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh](https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh))
 ```
 
 **分发加速镜像 (中国大陆机器推荐):**
 ```bash
-bash <(curl -Ls https://ghp.ci/https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh)
+bash <(curl -Ls [https://ghp.ci/https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh](https://ghp.ci/https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh))
 ```
 
 #### ⚡ 全局管理
-安装完成后，在终端输入以下指令即可瞬间唤醒中控面板：
+安装完成后，在终端输入以下指令即可瞬间唤醒中控面板（支持离线唤醒）：
 ```bash
 sb
 ```
+
+### 📂 架构一览
+| 引擎模式 | 适用场景 | 核心技术点 |
+| :--- | :--- | :--- |
+| **🛡️ Xray-core** | 强隐私网络隔离 | `TCP-Vision` 极致流控, v26 原生 Hy2 支持 |
+| **⚡ Sing-box** | 高并发吞吐路由 | 原生端口跳跃, Chrome Root Store 指纹校验 |
+
+### 🛠️ 系统管理功能
+* **[选项 11] 本机参数与IP网络测速诊断**: 本机参数明细与服务器综合网络基准测试。
+* **[选项 13] 参数明细与节点链接**: 渲染各协议的通用 URI 与 **Clash Meta (Mihomo) YAML** 拓扑配置。
+* **[选项 14] 脚本源码 OTA 热更新**: 一键强制从云端同步并校验最新源码至本地库。
+* **[选项 15] 彻底清空卸载环境**: 智能双轨卸载，可选择物理清场或保留本地核心缓存火种。
 
 ---
 
@@ -61,9 +74,13 @@ sb
 ---
 
 ## ⚠️ 系统要求 / System Requirements
-* **OS**: Debian 10+, Ubuntu 20.04+, CentOS 8+.
-* **Init System**: Systemd is required.
+* **OS**: Debian 10+, Ubuntu 20.04+, CentOS 8+, AlmaLinux.
+* **Init System**: Systemd is strictly required.
 * **User**: Root access is mandatory.
+
+## 🤝 反馈与交流 / Feedback & Support
+如果您在使用中遇到问题，欢迎提交 Issue：
+* [GitHub Issues](https://github.com/alariclin/aio-box/issues)
 
 ## 📄 许可证 / License
 Released under the [MIT License](https://opensource.org/licenses/MIT).
