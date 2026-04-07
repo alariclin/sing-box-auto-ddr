@@ -1,4 +1,4 @@
-# All-In-One Duo
+# Aio-box
 
 - **[中文说明](#-中文说明) | [English Description](#-english-description)**
 - **致谢 / Credits:** 感谢 [Xray-core](https://github.com/XTLS/Xray-core) 与 [Sing-box](https://github.com/SagerNet/sing-box) 提供的强大网络路由核心引擎。 / Thanks to [Xray-core](https://github.com/XTLS/Xray-core) and [Sing-box](https://github.com/SagerNet/sing-box).
@@ -13,7 +13,7 @@
 <a name="-中文说明"></a>
 ## 中文说明
 
-**All-In-One Duo** 是一款专为网络安全与路由优化打造的“双核·高可用”一键部署环境。本项目将底层架构聚焦于 Xray-core 与 Sing-box 的无缝切换，并集成了内核级流量熔断与系统网络栈极客级调优机制。
+**Aio-box** 是一款专为网络安全与路由优化打造的“双核·高可用”一键部署环境。本项目将底层架构聚焦于 Xray-core 与 Sing-box 的无缝切换，并集成了内核级流量熔断与系统网络栈极客级调优机制。
 
 ### ✨ 核心特性
 * **双核自适应驱动:** 智能调度 Xray-core 与 Sing-box 路由引擎。支持模块化组合部署，或单协议独立部署。
@@ -65,7 +65,7 @@ sb
 <a name="-english-description"></a>
 ## English Description
 
-**All-In-One Duo** is a high-availability, robust deployment environment designed for network security and routing optimization. Built on a dual-core architecture, it seamlessly integrates Xray-core and Sing-box, featuring automated YAML topology generation, offline core caching, and kernel-level TCP/BBR tuning.
+**Aio-box** is a high-availability, robust deployment environment designed for network security and routing optimization. Built on a dual-core architecture, it seamlessly integrates Xray-core and Sing-box, featuring automated YAML topology generation, offline core caching, and kernel-level TCP/BBR tuning.
 
 ### ✨ Key Features
 * **Dual-Core Routing:** Native support for both Xray and Sing-box engines. Deploy modular network protocols with extreme flexibility.
