@@ -28,11 +28,12 @@
 在您的 VPS 终端 (Root 用户) 执行以下命令：
 
 ```bash
-bash <(curl -Ls [https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh](https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh))
+bash <(curl -Ls https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh)
 ```
+
 **中国大陆机器极速安装镜像:**
 ```bash
-bash <(curl -Ls [https://ghp.ci/https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh](https://ghp.ci/https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh))
+bash <(curl -Ls https://ghp.ci/https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh)
 ```
 
 #### ⚡ 全局快捷指令
@@ -75,11 +76,12 @@ sb
 Run the following command in your VPS terminal (Root):
 
 ```bash
-bash <(curl -Ls [https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh](https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh))
+bash <(curl -Ls https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh)
 ```
+
 **China Mirror (Fast Install):**
 ```bash
-bash <(curl -Ls [https://ghp.ci/https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh](https://ghp.ci/https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh))
+bash <(curl -Ls https://ghp.ci/https://raw.githubusercontent.com/alariclin/all-in-one-duo/main/install.sh)
 ```
 
 #### ⚡ Global Shortcut
