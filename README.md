@@ -1,6 +1,6 @@
 # All-in-One Duo
 
-- **[🇨🇳 中文说明](#-中文说明) | [🌐 English Description](#-english-description)**
+- **[中文说明](#-中文说明) | [English Description](#-english-description)**
 - **致谢 / Credits:** 感谢 [Xray-core](https://github.com/XTLS/Xray-core) 与 [Sing-box](https://github.com/SagerNet/sing-box) 提供的强大核心引擎。 / Thanks to [Xray-core](https://github.com/XTLS/Xray-core) and [Sing-box](https://github.com/SagerNet/sing-box).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -11,7 +11,7 @@
 ---
 
 <a name="-中文说明"></a>
-## 🇨🇳 中文说明
+## 中文说明
 
 **All-in-One Duo** 是一款专为 2026 年极端网络审查环境打造的“双核·全矩阵”一键防弹部署脚本。它彻底摒弃了臃肿的旧协议，将底层逻辑聚焦于 **Xray-core (xhttp)** 与 **Sing-box (全能矩阵)** 的双核无缝切换，并集成了极客级 VPS 开荒调优与内核级流量熔断机制。
 
@@ -58,7 +58,7 @@ sb
 ---
 
 <a name="-english-description"></a>
-## 🌐 English Description
+## English Description
 
 **All-in-One Duo** is a high-performance, bulletproof deployment script designed for the extreme network conditions of 2026. Built on a "Dual-Core" engine, it seamlessly switches between **Xray-core (xhttp)** and **Sing-box (Omni-Matrix)**, focusing exclusively on next-gen stealth protocols and kernel-level optimizations.
 
