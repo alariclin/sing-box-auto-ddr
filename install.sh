@@ -2,7 +2,7 @@
 # ====================================================================
 # All-in-One Duo Ultimate Console [Dual-Core Omni | Bilingual | Shortcut 'sb']
 # Features: Global Shortcut 'sb', VPS Auto-Tuning, Traffic Guard Quota
-# Author: alariclin | Version: 2026.04.Final
+# Author: Nobody | Version: 2026.04.Final
 # ====================================================================
 
 set -e
