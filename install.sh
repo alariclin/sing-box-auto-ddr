@@ -2,16 +2,14 @@
 # ====================================================================
 # Aio-box Ultimate Console [Full Features & Zero-Conflict]
 # Features: Dual-Engine, Anti-Apple-SNI, Xray-v26, Sing-box-Testing
-# Author: Nbody | Version: 2026.04.Apex-Stable-V16-Full
+# Author: nobody | Version: 2026.04.Apex-Stable-V17-Final
 # Repo: https://github.com/alariclin/aio-box
 # ====================================================================
 
-set -e
 export DEBIAN_FRONTEND=noninteractive
-export LC_ALL=C
+# 已移除 set -e 和 LC_ALL=C 陷阱，彻底解决退格键 ^H 问题及 sb 误触回滚现象
 
 RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[0;33m' BLUE='\033[0;36m' PURPLE='\033[0;35m' CYAN='\033[0;36m' NC='\033[0m' BOLD='\033[1m'
-trap 'echo -e "\n${RED}[!] 触发安全自愈，系统中断并回滚。${NC}"; exit 1' ERR
 
 # --- [0] 强制 Root 权限与基础清理 ---
 if [[ $EUID -ne 0 ]]; then
@@ -149,7 +147,7 @@ HY2_OBFS="$HY2_OBFS"
 SS_PASS="$SS_PASS"
 LINK_IP="$PUBLIC_IP"
 ENV_EOF
-    echo -e "${GREEN}✔ Xray-core $MODE 部署成功！${NC}"; read -p "按回车返回..."
+    echo -e "${GREEN}✔ Xray-core $MODE 部署成功！${NC}"; read -ep "按回车返回..."
     return 0
 }
 
@@ -212,14 +210,14 @@ HY2_OBFS="$HY2_OBFS"
 SS_PASS="$SS_PASS"
 LINK_IP="$PUBLIC_IP"
 ENV_EOF
-    echo -e "${GREEN}✔ Sing-box $MODE 部署成功！${NC}"; read -p "按回车返回..."
+    echo -e "${GREEN}✔ Sing-box $MODE 部署成功！${NC}"; read -ep "按回车返回..."
     return 0
 }
 
 # --- [5] 系统运维与管理模块 ---
 setup_quota() {
     clear; echo -e "${CYAN}=== 流量监控与自动熔断设置 (基于 vnStat API) ===${NC}"
-    read -p "请输入每月流量熔断上限 (GB，输入 0 取消限制): " QUOTA_GB
+    read -ep "请输入每月流量熔断上限 (GB，输入 0 取消限制): " QUOTA_GB
     if [[ "$QUOTA_GB" -gt 0 ]]; then
         cat > /etc/ddr/quota.sh << EOF
 #!/bin/bash
@@ -242,7 +240,7 @@ EOF
         crontab -l 2>/dev/null | grep -v "/etc/ddr/quota.sh" | crontab - 2>/dev/null || true
         echo -e "${YELLOW}✔ 流量限制已解除。${NC}"
     fi
-    read -p "按回车返回..."
+    read -ep "按回车返回..."
 }
 
 diagnostics() {
@@ -251,7 +249,7 @@ diagnostics() {
     bash <(curl -Ls https://Check.Place) -I || true
     echo -e "\n${YELLOW}[ 全球节点测速 ]${NC}"
     wget -qO- bench.sh | bash || true
-    read -p "按回车返回..."
+    read -ep "按回车返回..."
 }
 
 tune_vps() {
@@ -268,7 +266,7 @@ net.ipv4.tcp_wmem = 4096 65536 67108864
 EOF
     sysctl -p /etc/sysctl.d/99-ddr-tune.conf >/dev/null 2>&1 || true
     echo -e "${GREEN}✔ BBR-Brutal 与高并发限制已解除。${NC}"
-    read -p "按回车返回..."
+    read -ep "按回车返回..."
 }
 
 view_config() {
@@ -291,12 +289,12 @@ view_config() {
         echo -e "${YELLOW}[ Shadowsocks-2022 通用链接 ]${NC}\nss://${SS_BASE64}@${LINK_IP}:2053#Aio-SS\n"
         echo -e "${PURPLE}[ Clash Meta SS YAML ]${NC}\n  - name: Aio-SS\n    type: ss\n    server: $LINK_IP\n    port: 2053\n    cipher: 2022-blake3-aes-128-gcm\n    password: $SS_PASS\n"
     fi
-    read -p "按回车返回主菜单..."
+    read -ep "按回车返回主菜单..."
 }
 
 clean_uninstall() {
     clear; echo -e "${RED}⚠️  卸载交互向导${NC}\n 1. 仅删除核心与配置 (保留本地缓存及 sb 指令)\n 2. 彻底抹除 (物理清场)"
-    read -p " 请选择 [1-2]: " clean_choice
+    read -ep " 请选择 [1-2]: " clean_choice
     systemctl disable --now xray sing-box 2>/dev/null || true
     rm -rf /usr/local/etc/xray /etc/sing-box /usr/local/bin/xray /usr/local/bin/sing-box /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service
     systemctl daemon-reload
@@ -315,12 +313,12 @@ while true; do
     systemctl is-active --quiet xray && STATUS="${GREEN}Running (Xray)${NC}" || { systemctl is-active --quiet sing-box && STATUS="${CYAN}Running (Sing-box)${NC}" || STATUS="${RED}Stopped${NC}"; }
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V16 Final] ${NC}\n${BLUE}======================================================${NC}"
+    clear; echo -e "${BLUE}======================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V17 Final] ${NC}\n${BLUE}======================================================${NC}"
     echo -e " IP: ${YELLOW}$IPV4${NC} | STATUS: $STATUS $CUR_MODE\n${BLUE}------------------------------------------------------${NC}"
     echo -e " ${YELLOW}--- Xray-core 独立/组合安装 ---${NC}\n ${GREEN}1.${NC} 部署 VLESS-Vision (REALITY)\n ${GREEN}2.${NC} 部署 Hysteria 2\n ${GREEN}3.${NC} 部署 Shadowsocks\n ${GREEN}4.${NC} 部署 协议全家桶 (三合一)"
     echo -e " ${CYAN}--- Sing-box  独立/组合安装 ---${NC}\n ${GREEN}5.${NC} 部署 VLESS-Vision (REALITY)\n ${GREEN}6.${NC} 部署 Hysteria 2\n ${GREEN}7.${NC} 部署 Shadowsocks\n ${GREEN}8.${NC} 部署 协议全家桶 (三合一)"
-    echo -e "${BLUE}------------------------------------------------------${NC}\n ${YELLOW}09.${NC} 流量监控与熔断护卫 (Quota Guard)\n ${GREEN}10.${NC} 综合诊断测速 (Diagnostics)\n ${GREEN}11.${NC} 极客级系统调优 (VPS Tuning)\n ${GREEN}13.${NC} 配置明细与节点提取 (Export Topology)\n ${YELLOW}14.${NC} 脚本源码 OTA 热更新\n ${RED}15.${NC} 彻底清空卸载环境\n ${GREEN}0.${NC}  退出面板\n${BLUE}======================================================${NC}"
-    read -p " 请选择 [0-15]: " choice
+    echo -e "${BLUE}------------------------------------------------------${NC}\n ${YELLOW}9.${NC} 流量监控与熔断护卫 (Quota Guard)\n ${GREEN}10.${NC} 本机参数与网络诊断测速\n ${GREEN}11.${NC} VPS全面优化\n ${GREEN}13.${NC} 配置明细与节点提取 (Export Topology)\n ${YELLOW}14.${NC} 脚本源码 OTA 热更新\n ${RED}15.${NC} 彻底清空卸载环境\n ${GREEN}0.${NC}  退出面板\n${BLUE}======================================================${NC}"
+    read -ep " 请选择 [0-15]: " choice
     case $choice in
         1) deploy_xray "VLESS" ;; 
         2) deploy_xray "HY2" ;; 
@@ -330,7 +328,7 @@ while true; do
         6) deploy_singbox "HY2" ;; 
         7) deploy_singbox "SS" ;; 
         8) deploy_singbox "ALL" ;;
-        09|9) setup_quota ;;
+        9) setup_quota ;;
         10) diagnostics ;;
         11) tune_vps ;;
         13) view_config ;; 
