@@ -31,7 +31,7 @@ sudo su -
 
 获取权限后，执行一键安装指令：
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh)
+sudo bash -c "$(curl -Ls https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh)"
 ```
 
 **分发加速镜像 (中国大陆机器推荐):**
