@@ -124,7 +124,6 @@ deploy_xray() {
     mkdir -p /usr/local/etc/xray; openssl ecparam -genkey -name prime256v1 -out /usr/local/etc/xray/hy2.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /usr/local/etc/xray/hy2.key -out /usr/local/etc/xray/hy2.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
 
-    # 深度架构修复：显式强制绑定 0.0.0.0 避免端口重影，移除 Hy2 的冗余 tlsSettings 以适配原生 QUIC
     JSON_VLESS='{ "listen": "0.0.0.0", "port": '$VLESS_PORT', "protocol": "vless", "settings": { "clients": [{"id": "'$UUID'", "flow": "xtls-rprx-vision"}], "decryption": "none" }, "streamSettings": { "network": "tcp", "security": "reality", "realitySettings": { "dest": "'$VLESS_SNI':443", "serverNames": ["'$VLESS_SNI'"], "privateKey": "'$PK'", "shortIds": ["'$SHORT_ID'"] } } }'
     JSON_HY2='{ "listen": "0.0.0.0", "port": '$HY2_PORT', "protocol": "hysteria", "tag": "hy2-in", "settings": { "version": 2, "obfs": "salamander", "obfsPassword": "'$HY2_OBFS'", "certificateFile": "/usr/local/etc/xray/hy2.crt", "keyFile": "/usr/local/etc/xray/hy2.key", "clients": [{"password": "'$HY2_PASS'"}] }, "streamSettings": { "network": "udp" } }'
     JSON_SS='{ "listen": "0.0.0.0", "port": '$SS_PORT', "protocol": "shadowsocks", "settings": { "method": "2022-blake3-aes-128-gcm", "password": "'$SS_PASS'", "network": "tcp,udp" } }'
@@ -189,7 +188,8 @@ deploy_singbox() {
     mkdir -p /etc/sing-box; openssl ecparam -genkey -name prime256v1 -out /etc/sing-box/hy2.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /etc/sing-box/hy2.key -out /etc/sing-box/hy2.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
 
-    JSON_VLESS='{ "type": "vless", "listen": "::", "listen_port": '$VLESS_PORT', "tcp_fast_open": true, "users": [{"uuid": "'$UUID'", "flow": "xtls-rprx-vision"}], "tls": { "enabled": true, "server_name": "'$VLESS_SNI'", "reality": { "enabled": true, "handshake": { "server": "'$VLESS_SNI'", "server_port": 443 }, "private_key": "'$PK'", "short_id": ["'$SHORT_ID'"] }, "utls": { "enabled": true, "fingerprint": "chrome" } } }'
+    # 修复漏洞：去除了非法的服务端 "utls" 字段，保障 Sing-box 严格配置解析通过
+    JSON_VLESS='{ "type": "vless", "listen": "::", "listen_port": '$VLESS_PORT', "tcp_fast_open": true, "users": [{"uuid": "'$UUID'", "flow": "xtls-rprx-vision"}], "tls": { "enabled": true, "server_name": "'$VLESS_SNI'", "reality": { "enabled": true, "handshake": { "server": "'$VLESS_SNI'", "server_port": 443 }, "private_key": "'$PK'", "short_id": ["'$SHORT_ID'"] } } }'
     JSON_HY2='{ "type": "hysteria2", "listen": "::", "listen_port": '$HY2_PORT', "up_mbps": 3000, "down_mbps": 3000, "obfs": { "type": "salamander", "password": "'$HY2_OBFS'" }, "users": [{"password": "'$HY2_PASS'"}], "tls": { "enabled": true, "certificate_path": "/etc/sing-box/hy2.crt", "key_path": "/etc/sing-box/hy2.key" } }'
     JSON_SS='{ "type": "shadowsocks", "listen": "::", "listen_port": '$SS_PORT', "tcp_fast_open": true, "method": "2022-blake3-aes-128-gcm", "password": "'$SS_PASS'" }'
 
