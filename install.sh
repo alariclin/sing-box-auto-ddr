@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ====================================================================
-# Aio-box Ultimate Console [Keypair Logic Fixed | Syntax Fixed]
-# Version: 2026.04.Apex-Stable-V53-Ultimate
+# Aio-box Ultimate Console [Xray-Hy2 Removed | Smart Uninstall Added]
+# Version: 2026.04.Apex-Stable-V54-Custom
 # ====================================================================
 
 export DEBIAN_FRONTEND=noninteractive
@@ -164,11 +164,6 @@ pre_install_setup() {
     local DEF_H_PORT=443
     local DEF_S_PORT=2053
 
-    # [Xray 内核防崩逻辑]: Xray 全家桶模式下，Hy2 强制引导为 8443
-    if [[ "$CORE" == "xray" && "$MODE" == *"ALL"* ]]; then
-        DEF_H_PORT=8443
-    fi
-
     echo -e "\n${CYAN}======================================================================${NC}"
     echo -e "${BOLD}🚀 部署前向导 / Pre-deployment Wizard [Core: $CORE | Mode: $MODE]${NC}"
     echo -e "   默认防封 SNI / Default Anti-block SNI: ${GREEN}$AUTO_REALITY${NC}"
@@ -215,16 +210,12 @@ deploy_xray() {
     mkdir -p /usr/local/share/xray /usr/local/etc/xray
     mv /tmp/geoip.dat /usr/local/share/xray/; mv /tmp/geosite.dat /usr/local/share/xray/
     
-    # [Bug Fix]: 完美修复两次生成导致公私钥错位的问题
+    # 完美修复两次生成导致公私钥错位的问题
     KEYPAIR=$(/usr/local/bin/xray x25519)
     PK=$(echo "$KEYPAIR" | grep -i "Private" | awk '{print $NF}')
     PBK=$(echo "$KEYPAIR" | grep -i "Public" | awk '{print $NF}')
     
     UUID=$(uuidgen); SHORT_ID=$(openssl rand -hex 4 | tr -d '\n\r'); SS_PASS=$(openssl rand -base64 16 | tr -d '\n\r')
-    HY2_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9'); HY2_OBFS=$(openssl rand -base64 8 | tr -dc 'a-zA-Z0-9')
-    
-    mkdir -p /usr/local/etc/xray; openssl ecparam -genkey -name prime256v1 -out /usr/local/etc/xray/hy2.key 2>/dev/null
-    openssl req -new -x509 -days 36500 -key /usr/local/etc/xray/hy2.key -out /usr/local/etc/xray/hy2.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
 
     JSON_VLESS=$(cat << EOF
     {
@@ -238,17 +229,6 @@ deploy_xray() {
     }
 EOF
 )
-    # Xray 核心强制去除 Hysteria 的 Obfs 以防解析失败崩溃
-    JSON_HY2=$(cat << EOF
-    {
-      "listen": "::", "port": ${HY2_PORT}, "protocol": "hysteria", "tag": "hy2-in",
-      "settings": {
-        "auth": "pass", "auth_str": "${HY2_PASS}",
-        "certificates": [{ "certificateFile": "/usr/local/etc/xray/hy2.crt", "keyFile": "/usr/local/etc/xray/hy2.key" }]
-      }
-    }
-EOF
-)
     JSON_SS=$(cat << EOF
     {
       "listen": "::", "port": ${SS_PORT}, "protocol": "shadowsocks",
@@ -259,9 +239,8 @@ EOF
 
     case $MODE in
         "VLESS") INBOUNDS="[$JSON_VLESS]" ;;
-        "HY2")   INBOUNDS="[$JSON_HY2]" ;;
         "SS")    INBOUNDS="[$JSON_SS]" ;;
-        "ALL")   INBOUNDS="[$JSON_VLESS, $JSON_HY2, $JSON_SS]" ;;
+        "VLESS_SS") INBOUNDS="[$JSON_VLESS, $JSON_SS]" ;;
     esac
 
     cat > /usr/local/etc/xray/config.json << EOF
@@ -289,9 +268,7 @@ After=network.target nss-lookup.target
 [Service]
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
-$(if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then echo -e "ExecStartPre=-/bin/sh -c '/sbin/iptables -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '/sbin/ip6tables -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '/sbin/iptables -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '/sbin/ip6tables -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"; fi)
 ExecStart=/usr/local/bin/xray run -config /usr/local/etc/xray/config.json
-$(if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then echo -e "ExecStopPost=-/bin/sh -c '/sbin/iptables -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStopPost=-/bin/sh -c '/sbin/ip6tables -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"; fi)
 Restart=always
 RestartSec=10
 LimitNOFILE=infinity
@@ -304,7 +281,7 @@ SVC_EOF
     sleep 2; systemctl is-active --quiet xray || { echo -e "${RED}[!] 致命错误：Xray 核心启动失败！ / Xray failed to start!${NC}"; journalctl -u xray --no-pager -n 20; exit 1; }
 
     cat > /etc/ddr/.env << ENV_EOF
-CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="none"; SS_PASS="$SS_PASS"; LINK_IP="$(curl -s4 api.ipify.org)"
+CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI=""; HY2_PORT=""; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS=""; HY2_OBFS=""; SS_PASS="$SS_PASS"; LINK_IP="$(curl -s4 api.ipify.org)"
 ENV_EOF
     view_config "deploy"
 }
@@ -316,7 +293,6 @@ deploy_singbox() {
     fetch_github_release "SagerNet/sing-box" "linux-${SB_ARCH}.tar.gz" "singbox_core.tar.gz"
     tar -xzf "/tmp/singbox_core.tar.gz" -C /tmp; mv /tmp/sing-box-*/sing-box /usr/local/bin/; chmod +x /usr/local/bin/sing-box
 
-    # [Bug Fix]: 完美修复两次生成导致公私钥错位的问题
     KEYPAIR=$(/usr/local/bin/sing-box generate reality-keypair)
     PK=$(echo "$KEYPAIR" | grep -i "Private" | awk '{print $NF}')
     PBK=$(echo "$KEYPAIR" | grep -i "Public" | awk '{print $NF}')
@@ -423,22 +399,17 @@ view_config() {
     echo -e "${BLUE}======================================================================${NC}\n${BOLD}${CYAN}   协议全部节点参数 (${MODE}) / All Protocol Parameters ${NC}\n${BLUE}======================================================================${NC}"
     echo -e "${BOLD}Engine:${NC} $CORE | ${BOLD}Mode:${NC} $MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     
-    if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
+    if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]] || [[ "$MODE" == "VLESS_SS" ]]; then
         VLESS_URL="vless://$UUID@$LINK_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VLESS_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#Aio-VLESS"
         echo -e "${YELLOW}[ VLESS-Vision 通用链接 / VLESS URI ]${NC}\n(注: 小火箭务必将 uTLS 设置为 chrome, 否则秒被服务端断开 / Set uTLS to chrome in client)\n${GREEN}${VLESS_URL}${NC}"
         generate_qr "$VLESS_URL"
     fi
     if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
-        if [[ "$CORE" == "xray" ]]; then
-             HY2_URL="hysteria2://$HY2_PASS@$LINK_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&mport=20000-50000#Aio-Hy2"
-             echo -e "${YELLOW}[ Hysteria 2 通用链接 / Hy2 URI (Xray无混淆版/No-obfs) ]${NC}\n(注: 小火箭务必开启 \"允许不安全\" / Allow insecure in client)\n${GREEN}${HY2_URL}${NC}"
-        else
-             HY2_URL="hysteria2://$HY2_PASS@$LINK_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=20000-50000#Aio-Hy2"
-             echo -e "${YELLOW}[ Hysteria 2 通用链接 / Hy2 URI ]${NC}\n(注: 小火箭务必开启 \"允许不安全\" / Allow insecure in client)\n${GREEN}${HY2_URL}${NC}"
-        fi
+        HY2_URL="hysteria2://$HY2_PASS@$LINK_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=20000-50000#Aio-Hy2"
+        echo -e "${YELLOW}[ Hysteria 2 通用链接 / Hy2 URI ]${NC}\n(注: 小火箭务必开启 \"允许不安全\" / Allow insecure in client)\n${GREEN}${HY2_URL}${NC}"
         generate_qr "$HY2_URL"
     fi
-    if [[ "$MODE" == *"SS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
+    if [[ "$MODE" == *"SS"* ]] || [[ "$MODE" == *"ALL"* ]] || [[ "$MODE" == "VLESS_SS" ]]; then
         SS_BASE64=$(echo -n "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 -w 0 2>/dev/null || echo -n "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 | tr -d '\n')
         SS_URL="ss://${SS_BASE64}@$LINK_IP:$SS_PORT#Aio-SS"
         echo -e "${YELLOW}[ Shadowsocks-2022 通用链接 / SS URI ]${NC}\n${GREEN}${SS_URL}${NC}"
@@ -447,7 +418,7 @@ view_config() {
     
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     echo -e "${YELLOW}[ Clash Meta 原生 YAML 节点块提取 / YAML Node Config ]${NC}"
-    if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
+    if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]] || [[ "$MODE" == "VLESS_SS" ]]; then
         cat <<EOF
   - name: "Aio-VLESS"
     type: vless
@@ -476,7 +447,8 @@ EOF
     alpn: [h3]
     sni: $HY2_SNI
     skip-cert-verify: true
-$(if [[ "$CORE" == "singbox" ]]; then echo -e "    obfs: salamander\n    obfs-password: $HY2_OBFS"; fi)
+    obfs: salamander
+    obfs-password: $HY2_OBFS
 EOF
     fi
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
@@ -485,20 +457,20 @@ EOF
     read -ep "按回车返回主菜单 / Press Enter to return..."
 }
 
-# --- [6] 说明书与自愈、OTA 功能 / Manual, Auto-fix & OTA ---
+# --- [6] 说明书与自愈、OTA、智能卸载 功能 / Manual, Auto-fix & OTA ---
 show_usage() {
     clear; echo -e "${CYAN}======================================================================${NC}"
     echo -e "${BOLD}${GREEN}   Aio-box Ultimate 脚本说明书 / Usage Guide${NC}"
     echo -e "${CYAN}======================================================================${NC}"
     echo -e "${YELLOW}1. 协议核心区别 (Protocol & Core Differences):${NC}"
     echo -e "   - Sing-box (推荐/Rec): 完美支持所有协议，允许 VLESS 与 Hy2 共用 443 端口。"
-    echo -e "   - Xray-core (备选/Alt): 极度稳定。在全家桶模式下，Hy2 会被强制分配至 8443 端口以防内核死锁。"
+    echo -e "   - Xray-core (备选/Alt): 极度稳定。删除了对 Hy2 的支持，专注 TCP 和 SS。"
     echo -e "${YELLOW}2. 客户端避坑指南 (Client Settings Warning):${NC}"
     echo -e "   - VLESS 节点在客户端中，uTLS 选项必须修改为 chrome，否则连不上。"
     echo -e "   - Hy2 节点在客户端中，必须开启 Allow Insecure (允许不安全/跳过证书验证)。"
-    echo -e "${YELLOW}3. 维护与自愈 (Maintenance & Auto-Fix):${NC}"
+    echo -e "${YELLOW}3. 维护与卸载 (Maintenance & Uninstall):${NC}"
     echo -e "   - 菜单 16 包含内核级环境修复功能，一键解决端口被占用、网络崩溃等疑难杂症。"
-    echo -e "   - 菜单 15 提供核弹级清理，瞬间让您的 VPS 恢复纯净出厂状态。"
+    echo -e "   - 菜单 15 卸载选项已升级，支持仅卸载环境但保留脚本指令。"
     echo -e "${CYAN}======================================================================${NC}\n"
     read -ep "按回车返回主菜单 / Press Enter to return..."
 }
@@ -526,8 +498,28 @@ update_script() {
     read -ep "按回车返回主菜单 / Press Enter to return..."
 }
 
-clean_uninstall() {
-    clear; echo -e "${RED}⚠️  正在执行核弹级清理... / Executing nuclear-level cleanup...${NC}"
+clean_uninstall_menu() {
+    clear
+    echo -e "${CYAN}======================================================================${NC}"
+    echo -e "${BOLD}${RED}   卸载清空选项 / Uninstall Options${NC}"
+    echo -e "${CYAN}======================================================================${NC}"
+    echo -e "${YELLOW}1. 完全卸载清空 (删除核心、配置、防火墙规则，并删除脚本快捷方式)${NC}"
+    echo -e "   Complete uninstall (Removes everything including the 'sb' command)"
+    echo -e "${YELLOW}2. 仅卸载代理环境 (保留一键安装脚本与 'sb' 快捷命令)${NC}"
+    echo -e "   Uninstall environment only (Keeps the 'sb' shortcut)"
+    echo -e "${GREEN}0. 返回主菜单 / Return to main menu${NC}"
+    echo -e "${CYAN}======================================================================${NC}"
+    read -ep " 请选择 / Please select [0-2]: " un_choice
+    
+    case $un_choice in
+        1) do_cleanup "full" ;;
+        2) do_cleanup "keep" ;;
+        0|*) return 0 ;;
+    esac
+}
+
+do_cleanup() {
+    clear; echo -e "${RED}⚠️  正在执行清理... / Executing cleanup...${NC}"
     systemctl stop xray sing-box hysteria 2>/dev/null || true
     systemctl disable xray sing-box hysteria 2>/dev/null || true
     killall -9 xray sing-box hysteria 2>/dev/null || true
@@ -537,8 +529,16 @@ clean_uninstall() {
     
     rm -rf /usr/local/etc/xray /etc/sing-box /usr/local/bin/xray /usr/local/bin/sing-box /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/hysteria.service /usr/local/bin/hysteria /etc/hysteria
     systemctl daemon-reload
-    rm -rf /etc/ddr /usr/local/bin/sb
-    echo -e "${GREEN}✔ 物理清场完成！VPS 已恢复纯净。 / Clean uninstall complete! VPS is pristine.${NC}"; exit 0
+    
+    if [[ "$1" == "full" ]]; then
+        rm -rf /etc/ddr /usr/local/bin/sb
+        echo -e "${GREEN}✔ 完全物理清场完成！VPS 已恢复纯净。 / Complete cleanup finished!${NC}"
+        exit 0
+    else
+        rm -f /etc/ddr/.env
+        echo -e "${GREEN}✔ 代理环境已清空！保留了 'sb' 快捷命令。 / Environment removed, 'sb' command retained.${NC}"
+        read -ep "按回车返回主菜单 / Press Enter to return..."
+    fi
 }
 
 check_virgin_state() {
@@ -646,37 +646,39 @@ while true; do
     systemctl is-active --quiet xray && STATUS="${GREEN}Running (Xray)${NC}" || { systemctl is-active --quiet sing-box && STATUS="${CYAN}Running (Sing-box)${NC}" || STATUS="${RED}Stopped${NC}"; }
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V53 Ultimate] ${NC}\n${BLUE}======================================================================${NC}"
+    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V54 Custom Final] ${NC}\n${BLUE}======================================================================${NC}"
     echo -e " IP: ${YELLOW}$IPV4${NC} | STATUS: $STATUS $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${YELLOW}[ Xray-core 部署 / Deploy ]${NC}          ${CYAN}[ Sing-box 部署 / Deploy ]${NC}"
     echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)         ${GREEN}5.${NC} VLESS-Vision (Reality)"
-    echo -e " ${GREEN}2.${NC} Hysteria 2                     ${GREEN}6.${NC} Hysteria 2"
+    echo -e " ${RED}2.${NC} [已移除] Xray 不支持 Hy2       ${GREEN}6.${NC} Hysteria 2"
     echo -e " ${GREEN}3.${NC} Shadowsocks                    ${GREEN}7.${NC} Shadowsocks"
-    echo -e " ${GREEN}4.${NC} 协议全家桶 / All-in-One        ${GREEN}8.${NC} 协议全家桶 / All-in-One"
+    echo -e " ${GREEN}4.${NC} VLESS + SS 双组合              ${GREEN}8.${NC} 协议全家桶 / All-in-One"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${GREEN}11.${NC} VPS网络调优 / VPS Tuning      ${YELLOW}13.${NC} 节点参数导出 / Export Nodes"
     echo -e " ${GREEN}12.${NC} 详细说明书 / Usage Guide      ${YELLOW}14.${NC} 源码在线更新 / OTA Sync"
-    echo -e " ${CYAN}16.${NC} 环境自愈 / Auto-Fix Audit      ${RED}15.${NC} 卸载清空 / Clean Uninstall"
+    echo -e " ${CYAN}16.${NC} 环境自愈 / Auto-Fix Audit      ${RED}15.${NC} 卸载选项 / Uninstall Options"
     echo -e " ${GREEN}0.${NC} 退出面板 / Exit"
     echo -e "${BLUE}======================================================================${NC}"
     read -ep " 请选择 / Please select: " choice
     
-    DEPLOY_MODE=""
+    local DEPLOY_MODE=""
     case $choice in
         1|5) DEPLOY_MODE="VLESS" ;;
-        2|6) DEPLOY_MODE="HY2" ;;
+        6) DEPLOY_MODE="HY2" ;;
         3|7) DEPLOY_MODE="SS" ;;
-        4|8) DEPLOY_MODE="ALL" ;;
+        4) DEPLOY_MODE="VLESS_SS" ;;
+        8) DEPLOY_MODE="ALL" ;;
     esac
 
     case $choice in
-        1|2|3|4) deploy_xray "$DEPLOY_MODE" ;;
+        1|3|4) deploy_xray "$DEPLOY_MODE" ;;
+        2) echo -e "${RED}Xray内核下已删除Hy2选项，请选择右侧的Sing-box安装。${NC}"; sleep 2 ;;
         5|6|7|8) deploy_singbox "$DEPLOY_MODE" ;;
         11) tune_vps ;; 
         12) show_usage ;;
         13) view_config ;; 
         14) update_script ;;
-        15) clean_uninstall ;; 
+        15) clean_uninstall_menu ;; 
         16) check_virgin_state ;; 
         0) clear; exit 0 ;; 
         *) sleep 1 ;;
