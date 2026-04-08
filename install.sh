@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # ====================================================================
 # Aio-box Ultimate Console [Vasma-Optimized Enterprise Edition]
-# Version: 2026.04.Apex-Stable-V48-Enterprise
+# Version: 2026.04.Apex-Stable-V49-Enterprise-Max
 # ====================================================================
 
 export DEBIAN_FRONTEND=noninteractive
 export LANG=en_US.UTF-8
 RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[0;33m' BLUE='\033[0;36m' PURPLE='\033[0;35m' CYAN='\033[0;36m' NC='\033[0m' BOLD='\033[1m'
 
+# --- [0] 提权与基础环境检查 ---
 if [[ $EUID -ne 0 ]]; then
     if command -v sudo >/dev/null 2>&1; then
         exec sudo bash "$0" "$@"
@@ -17,9 +18,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 sed -i '/acme.sh.env/d' ~/.bashrc >/dev/null 2>&1 || true
 
-# --- [0] 核心底层 OS 检测 (引入 Vasma 逻辑) ---
 checkSystem() {
-    if [[ -n $(find /etc -name "redhat-release") ]] || grep </proc/version -q -i "centos"; then
+    if [[ -n $(find /etc -name "redhat-release" 2>/dev/null) ]] || grep </proc/version -q -i "centos"; then
         release="centos"
         installType='yum -y install'
         removeType='yum -y remove'
@@ -54,16 +54,16 @@ get_architecture() {
 
 # --- [1] 环境初始化与依赖同步 ---
 check_env() {
-    if ! command -v jq >/dev/null || ! command -v fuser >/dev/null || ! command -v unzip >/dev/null || ! command -v lsof >/dev/null; then
+    if ! command -v jq >/dev/null || ! command -v fuser >/dev/null || ! command -v unzip >/dev/null || ! command -v qrencode >/dev/null; then
         echo -e "${YELLOW}[*] 正在同步系统依赖环境 (基于 ${release})...${NC}"
         if [[ "${release}" == "ubuntu" || "${release}" == "debian" ]]; then
-            apt-get update -y -q
+            apt-get update -y -q >/dev/null 2>&1
         elif [[ "${release}" == "centos" ]]; then
-            yum makecache -y -q
+            yum makecache -y -q >/dev/null 2>&1
             ${installType} epel-release >/dev/null 2>&1
         fi
         
-        local deps=(wget curl jq openssl uuid-runtime cron python3 bc unzip vnstat iptables tar psmisc lsof)
+        local deps=(wget curl jq openssl uuid-runtime cron python3 bc unzip vnstat iptables tar psmisc lsof qrencode ca-certificates)
         if [[ "${release}" == "ubuntu" || "${release}" == "debian" ]]; then
             deps+=(iptables-persistent netfilter-persistent fail2ban)
         elif [[ "${release}" == "centos" ]]; then
@@ -89,7 +89,7 @@ setup_shortcut() {
     fi
 }
 
-# --- [2] 智能防火墙接管 (Vasma 级兼容) ---
+# --- [2] 智能防火墙接管 ---
 allowPort() {
     local port=$1
     local type=${2:-tcp}
@@ -220,15 +220,17 @@ deploy_xray() {
       "streamSettings": {
         "network": "tcp", "security": "reality",
         "realitySettings": { "dest": "${VLESS_SNI}:443", "serverNames": ["${VLESS_SNI}"], "privateKey": "${PK}", "shortIds": ["${SHORT_ID}"] }
-      }
+      },
+      "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
     }
 EOF
 )
+    # Xray 核心建议去除 Hysteria 的 Obfs 以免引发 invalid padding length
     JSON_HY2=$(cat << EOF
     {
       "listen": "::", "port": ${HY2_PORT}, "protocol": "hysteria", "tag": "hy2-in",
       "settings": {
-        "auth": "pass", "auth_str": "${HY2_PASS}", "obfs": "salamander", "obfs_password": "${HY2_OBFS}",
+        "auth": "pass", "auth_str": "${HY2_PASS}",
         "certificates": [{ "certificateFile": "/usr/local/etc/xray/hy2.crt", "keyFile": "/usr/local/etc/xray/hy2.key" }]
       }
     }
@@ -289,7 +291,7 @@ SVC_EOF
     sleep 2; systemctl is-active --quiet xray || { echo -e "${RED}[!] 致命错误：Xray 核心启动失败！${NC}"; journalctl -u xray --no-pager -n 20; exit 1; }
 
     cat > /etc/ddr/.env << ENV_EOF
-CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="$(curl -s4 api.ipify.org)"
+CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="none"; SS_PASS="$SS_PASS"; LINK_IP="$(curl -s4 api.ipify.org)"
 ENV_EOF
     view_config "deploy"
 }
@@ -314,6 +316,7 @@ deploy_singbox() {
     JSON_VLESS=$(cat << EOF
     {
       "type": "vless", "listen": "::", "listen_port": ${VLESS_PORT}, "tcp_fast_open": true,
+      "sniff": true, "sniff_override_destination": true,
       "users": [{"uuid": "${UUID}", "flow": "xtls-rprx-vision"}],
       "tls": {
         "enabled": true, "server_name": "${VLESS_SNI}",
@@ -325,6 +328,7 @@ EOF
     JSON_HY2=$(cat << EOF
     {
       "type": "hysteria2", "listen": "::", "listen_port": ${HY2_PORT}, "up_mbps": 3000, "down_mbps": 3000,
+      "sniff": true, "sniff_override_destination": true,
       "obfs": { "type": "salamander", "password": "${HY2_OBFS}" },
       "users": [{"password": "${HY2_PASS}"}],
       "tls": { "enabled": true, "certificate_path": "/etc/sing-box/hy2.crt", "key_path": "/etc/sing-box/hy2.key" }
@@ -334,6 +338,7 @@ EOF
     JSON_SS=$(cat << EOF
     {
       "type": "shadowsocks", "listen": "::", "listen_port": ${SS_PORT}, "tcp_fast_open": true,
+      "sniff": true, "sniff_override_destination": true,
       "method": "2022-blake3-aes-128-gcm", "password": "${SS_PASS}"
     }
 EOF
@@ -389,7 +394,16 @@ ENV_EOF
     view_config "deploy"
 }
 
-# --- [5] 系统与维护功能 ---
+# --- [5] 节点信息导出与二维码生成 ---
+generate_qr() {
+    local url=$1
+    if command -v qrencode >/dev/null 2>&1; then
+        echo -e "\n${CYAN}================ 扫码导入 =================${NC}"
+        echo -e "${url}" | qrencode -s 1 -m 2 -t UTF8
+        echo -e "${CYAN}===========================================${NC}\n"
+    fi
+}
+
 view_config() {
     local CALLER=$1; clear; [[ ! -f /etc/ddr/.env ]] && { echo -e "${RED}未检测到配置！${NC}"; sleep 2; return 0; }
     source /etc/ddr/.env
@@ -397,20 +411,64 @@ view_config() {
     echo -e "${BOLD}Engine:${NC} $CORE | ${BOLD}Mode:${NC} $MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     
     if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
-        echo -e "${YELLOW}[ VLESS-Vision 通用链接 ]${NC}\n(注: 小火箭务必将 uTLS 设置为 chrome, 否则秒被服务端断开)\nvless://$UUID@$LINK_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VLESS_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#Aio-VLESS\n"
+        VLESS_URL="vless://$UUID@$LINK_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VLESS_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#Aio-VLESS"
+        echo -e "${YELLOW}[ VLESS-Vision 通用链接 ]${NC}\n(注: 小火箭务必将 uTLS 设置为 chrome, 否则秒被服务端断开)\n${GREEN}${VLESS_URL}${NC}"
+        generate_qr "$VLESS_URL"
     fi
     if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
         if [[ "$CORE" == "xray" ]]; then
-             echo -e "${YELLOW}[ Hysteria 2 通用链接 ]${NC}\n(注: 小火箭务必开启 \"允许不安全\")\nhysteria2://$HY2_PASS@$LINK_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=20000-50000#Aio-Hy2\n"
+             HY2_URL="hysteria2://$HY2_PASS@$LINK_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&mport=20000-50000#Aio-Hy2"
+             echo -e "${YELLOW}[ Hysteria 2 通用链接 (Xray无混淆版) ]${NC}\n(注: 小火箭务必开启 \"允许不安全\")\n${GREEN}${HY2_URL}${NC}"
         else
-             echo -e "${YELLOW}[ Hysteria 2 通用链接 ]${NC}\n(注: 小火箭务必开启 \"允许不安全\")\nhysteria2://$HY2_PASS@$LINK_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=20000-50000#Aio-Hy2\n"
+             HY2_URL="hysteria2://$HY2_PASS@$LINK_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=20000-50000#Aio-Hy2"
+             echo -e "${YELLOW}[ Hysteria 2 通用链接 ]${NC}\n(注: 小火箭务必开启 \"允许不安全\")\n${GREEN}${HY2_URL}${NC}"
         fi
+        generate_qr "$HY2_URL"
     fi
     if [[ "$MODE" == *"SS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
         SS_BASE64=$(echo -n "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 -w 0 2>/dev/null || echo -n "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 | tr -d '\n')
-        echo -e "${YELLOW}[ Shadowsocks-2022 通用链接 ]${NC}\nss://${SS_BASE64}@$LINK_IP:$SS_PORT#Aio-SS\n"
+        SS_URL="ss://${SS_BASE64}@$LINK_IP:$SS_PORT#Aio-SS"
+        echo -e "${YELLOW}[ Shadowsocks-2022 通用链接 ]${NC}\n${GREEN}${SS_URL}${NC}"
+        generate_qr "$SS_URL"
     fi
     
+    # Clash Meta YAML 极简直出
+    echo -e "${BLUE}----------------------------------------------------------------------${NC}"
+    echo -e "${YELLOW}[ Clash Meta 原生 YAML 节点块提取 ]${NC}"
+    if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
+        cat <<EOF
+  - name: "Aio-VLESS"
+    type: vless
+    server: $LINK_IP
+    port: $VLESS_PORT
+    uuid: $UUID
+    network: tcp
+    tls: true
+    udp: true
+    flow: xtls-rprx-vision
+    client-fingerprint: chrome
+    servername: $VLESS_SNI
+    reality-opts:
+      public-key: $PUBLIC_KEY
+      short-id: $SHORT_ID
+EOF
+    fi
+    if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
+        cat <<EOF
+  - name: "Aio-Hy2"
+    type: hysteria2
+    server: $LINK_IP
+    port: $HY2_PORT
+    ports: 20000-50000
+    password: $HY2_PASS
+    alpn: [h3]
+    sni: $HY2_SNI
+    skip-cert-verify: true
+$(if [[ "$CORE" == "singbox" ]]; then echo -e "    obfs: salamander\n    obfs-password: $HY2_OBFS"; fi)
+EOF
+    fi
+    echo -e "${BLUE}----------------------------------------------------------------------${NC}"
+
     [[ "$CALLER" == "deploy" ]] && echo -e "${GREEN}✔ 部署成功！如果要查询节点明细请随时进入菜单 13。${NC}"
     read -ep "按回车返回主菜单..."
 }
@@ -422,10 +480,7 @@ clean_uninstall() {
     killall -9 xray sing-box hysteria 2>/dev/null || true
     iptables -w -t nat -F PREROUTING 2>/dev/null || true
     ip6tables -w -t nat -F PREROUTING 2>/dev/null || true
-    
-    # 移除防火墙特定规则
-    iptables -w -D INPUT -p tcp --dport 443 -m comment --comment "Aio-box-443-tcp" -j ACCEPT 2>/dev/null || true
-    iptables -w -D INPUT -p udp --dport 443 -m comment --comment "Aio-box-443-udp" -j ACCEPT 2>/dev/null || true
+    iptables -w -F INPUT 2>/dev/null || true
     
     rm -rf /usr/local/etc/xray /etc/sing-box /usr/local/bin/xray /usr/local/bin/sing-box /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/hysteria.service /usr/local/bin/hysteria /etc/hysteria
     systemctl daemon-reload
@@ -511,6 +566,7 @@ EOF
     cat > /etc/sysctl.d/99-aio-box-tune.conf << 'EOF'
 fs.file-max = 1048576
 fs.inotify.max_user_instances = 8192
+net.ipv4.ip_forward = 1
 net.ipv4.tcp_syncookies = 3
 net.ipv4.tcp_fin_timeout = 30
 net.ipv4.tcp_keepalive_time = 1200
@@ -526,7 +582,7 @@ net.core.somaxconn = 32768
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 EOF
-    sysctl -p /etc/sysctl.d/99-aio-box-tune.conf >/dev/null 2>&1 || true
+    sysctl --system >/dev/null 2>&1 || true
     echo -e "${GREEN}✔ BBR与内核调优应用成功。${NC}"; read -ep "按回车返回..."
 }
 
@@ -537,7 +593,7 @@ while true; do
     systemctl is-active --quiet xray && STATUS="${GREEN}Running (Xray)${NC}" || { systemctl is-active --quiet sing-box && STATUS="${CYAN}Running (Sing-box)${NC}" || STATUS="${RED}Stopped${NC}"; }
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V48 Enterprise] ${NC}\n${BLUE}======================================================================${NC}"
+    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V49 Enterprise Max] ${NC}\n${BLUE}======================================================================${NC}"
     echo -e " IP: ${YELLOW}$IPV4${NC} | STATUS: $STATUS $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${YELLOW}[ Xray-core 部署 ]${NC}          ${CYAN}[ Sing-box 部署 ]${NC}"
     echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)   ${GREEN}5.${NC} VLESS-Vision (Reality)"
