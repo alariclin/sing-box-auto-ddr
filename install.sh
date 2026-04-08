@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ====================================================================
-# Aio-box Ultimate Console [Vasma-Optimized Enterprise Edition]
-# Version: 2026.04.Apex-Stable-V49-Enterprise-Max
+# Aio-box Ultimate Console [Sing-box v1.13+ Fixed & Menu Routing Fixed]
+# Version: 2026.04.Apex-Stable-V50-Final
 # ====================================================================
 
 export DEBIAN_FRONTEND=noninteractive
@@ -160,7 +160,7 @@ pre_install_setup() {
     AUTO_REALITY="www.microsoft.com"
 
     echo -e "\n${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}🚀 部署前向导：正统 443 端口部署方案${NC}"
+    echo -e "${BOLD}🚀 部署前向导：正统端口部署方案 [模式: $MODE]${NC}"
     echo -e "   强制使用防封 SNI: ${GREEN}$AUTO_REALITY${NC}"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
 
@@ -187,10 +187,9 @@ pre_install_setup() {
     VLESS_SNI=${VLESS_SNI:-$AUTO_REALITY}; HY2_SNI=${HY2_SNI:-$AUTO_REALITY}
     VLESS_PORT=${VLESS_PORT:-443}; HY2_PORT=${HY2_PORT:-443}; SS_PORT=${SS_PORT:-2053}
     
-    allowPort "$VLESS_PORT" "tcp"
-    allowPort "$HY2_PORT" "udp"
-    allowPort "$SS_PORT" "tcp"
-    allowPort "$SS_PORT" "udp"
+    [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]] && allowPort "$VLESS_PORT" "tcp"
+    [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]] && allowPort "$HY2_PORT" "udp"
+    [[ "$MODE" == *"SS"* ]] || [[ "$MODE" == *"ALL"* ]] && { allowPort "$SS_PORT" "tcp"; allowPort "$SS_PORT" "udp"; }
 }
 
 deploy_xray() {
@@ -225,7 +224,6 @@ deploy_xray() {
     }
 EOF
 )
-    # Xray 核心建议去除 Hysteria 的 Obfs 以免引发 invalid padding length
     JSON_HY2=$(cat << EOF
     {
       "listen": "::", "port": ${HY2_PORT}, "protocol": "hysteria", "tag": "hy2-in",
@@ -313,10 +311,10 @@ deploy_singbox() {
     mkdir -p /etc/sing-box; openssl ecparam -genkey -name prime256v1 -out /etc/sing-box/hy2.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /etc/sing-box/hy2.key -out /etc/sing-box/hy2.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
 
+    # [Bug Fix]: 彻底移除 sing-box v1.13 废弃的 sniff 字段
     JSON_VLESS=$(cat << EOF
     {
       "type": "vless", "listen": "::", "listen_port": ${VLESS_PORT}, "tcp_fast_open": true,
-      "sniff": true, "sniff_override_destination": true,
       "users": [{"uuid": "${UUID}", "flow": "xtls-rprx-vision"}],
       "tls": {
         "enabled": true, "server_name": "${VLESS_SNI}",
@@ -328,7 +326,6 @@ EOF
     JSON_HY2=$(cat << EOF
     {
       "type": "hysteria2", "listen": "::", "listen_port": ${HY2_PORT}, "up_mbps": 3000, "down_mbps": 3000,
-      "sniff": true, "sniff_override_destination": true,
       "obfs": { "type": "salamander", "password": "${HY2_OBFS}" },
       "users": [{"password": "${HY2_PASS}"}],
       "tls": { "enabled": true, "certificate_path": "/etc/sing-box/hy2.crt", "key_path": "/etc/sing-box/hy2.key" }
@@ -338,7 +335,6 @@ EOF
     JSON_SS=$(cat << EOF
     {
       "type": "shadowsocks", "listen": "::", "listen_port": ${SS_PORT}, "tcp_fast_open": true,
-      "sniff": true, "sniff_override_destination": true,
       "method": "2022-blake3-aes-128-gcm", "password": "${SS_PASS}"
     }
 EOF
@@ -357,7 +353,8 @@ EOF
   "route": {
     "rules": [
       { "protocol": "bittorrent", "outbound": "block" }
-    ]
+    ],
+    "auto_detect_interface": true
   },
   "inbounds": ${INBOUNDS},
   "outbounds": [
@@ -432,7 +429,6 @@ view_config() {
         generate_qr "$SS_URL"
     fi
     
-    # Clash Meta YAML 极简直出
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     echo -e "${YELLOW}[ Clash Meta 原生 YAML 节点块提取 ]${NC}"
     if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
@@ -593,7 +589,7 @@ while true; do
     systemctl is-active --quiet xray && STATUS="${GREEN}Running (Xray)${NC}" || { systemctl is-active --quiet sing-box && STATUS="${CYAN}Running (Sing-box)${NC}" || STATUS="${RED}Stopped${NC}"; }
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V49 Enterprise Max] ${NC}\n${BLUE}======================================================================${NC}"
+    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V50 Final] ${NC}\n${BLUE}======================================================================${NC}"
     echo -e " IP: ${YELLOW}$IPV4${NC} | STATUS: $STATUS $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${YELLOW}[ Xray-core 部署 ]${NC}          ${CYAN}[ Sing-box 部署 ]${NC}"
     echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)   ${GREEN}5.${NC} VLESS-Vision (Reality)"
@@ -606,9 +602,19 @@ while true; do
     echo -e " ${GREEN}0.${NC}  退出面板 / Exit"
     echo -e "${BLUE}======================================================================${NC}"
     read -ep " 请选择: " choice
+    
+    # [Bug Fix]: 完美修正 bash 短路计算传参导致的 ALL 循环异常
+    local DEPLOY_MODE="ALL"
     case $choice in
-        1|2|3|4) deploy_xray "$([[ $choice == 1 ]] && echo VLESS || [[ $choice == 2 ]] && echo HY2 || [[ $choice == 3 ]] && echo SS || echo ALL)" ;;
-        5|6|7|8) deploy_singbox "$([[ $choice == 5 ]] && echo VLESS || [[ $choice == 6 ]] && echo HY2 || [[ $choice == 7 ]] && echo SS || echo ALL)" ;;
+        1|5) DEPLOY_MODE="VLESS" ;;
+        2|6) DEPLOY_MODE="HY2" ;;
+        3|7) DEPLOY_MODE="SS" ;;
+        4|8) DEPLOY_MODE="ALL" ;;
+    esac
+
+    case $choice in
+        1|2|3|4) deploy_xray "$DEPLOY_MODE" ;;
+        5|6|7|8) deploy_singbox "$DEPLOY_MODE" ;;
         11) tune_vps ;; 13) view_config ;; 
         15) clean_uninstall ;; 16) check_virgin_state ;; 0) clear; exit 0 ;; *) sleep 1 ;;
     esac
