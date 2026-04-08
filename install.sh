@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ====================================================================
-# Aio-box Ultimate Console [Full Menu Restored & JSON Bug Fixed]
-# Version: 2026.04.Apex-Stable-V40-Perfect
+# Aio-box Ultimate Console [Virgin State Check Added & Optimized]
+# Version: 2026.04.Apex-Stable-V41-Perfect
 # ====================================================================
 
 export DEBIAN_FRONTEND=noninteractive
@@ -153,7 +153,6 @@ deploy_xray() {
     mkdir -p /usr/local/etc/xray; openssl ecparam -genkey -name prime256v1 -out /usr/local/etc/xray/hy2.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /usr/local/etc/xray/hy2.key -out /usr/local/etc/xray/hy2.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
 
-    # 安全地构建 JSON 模块，避免 Bash 字符串引号解析错误
     JSON_VLESS=$(cat << EOF
     {
       "listen": "0.0.0.0", "port": ${VLESS_PORT}, "protocol": "vless",
@@ -234,7 +233,6 @@ deploy_singbox() {
     mkdir -p /etc/sing-box; openssl ecparam -genkey -name prime256v1 -out /etc/sing-box/hy2.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /etc/sing-box/hy2.key -out /etc/sing-box/hy2.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
 
-    # 安全地构建 JSON 模块，避免 Bash 字符串引号解析错误
     JSON_VLESS=$(cat << EOF
     {
       "type": "vless", "listen": "::", "listen_port": ${VLESS_PORT}, "tcp_fast_open": true,
@@ -313,7 +311,8 @@ show_usage() {
     echo -e "11.  VPS优化: 解除 Linux 最大连接数限制，开启 BBR-Brutal 加速。"
     echo -e "13.  节点参数: 随时查看当前已安装的配置信息及通用 URI 链接。"
     echo -e "14.  OTA更新: 一键同步 GitHub 最新版脚本代码并无损热更新。"
-    echo -e "15.  彻底卸载: 核弹级物理清理，强制斩杀顽固进程并重置防火墙。\n"
+    echo -e "15.  彻底卸载: 核弹级物理清理，强制斩杀顽固进程并重置防火墙。"
+    echo -e "16.  环境预检: 彻底检查死锁端口、幽灵进程等异常，确立安装纯净度。\n"
     read -ep "按回车返回主菜单 / Press Enter to return..."
 }
 
@@ -419,6 +418,63 @@ clean_uninstall() {
     fi
 }
 
+check_virgin_state() {
+    clear
+    echo -e "\n\033[1;33m========================================================\033[0m"
+    echo -e "\033[1;33m       Aio-box 终极环境纯净度审计 (Virgin State Check)     \033[0m"
+    echo -e "\033[1;33m========================================================\033[0m\n"
+
+    echo -e "\033[1;36m[1/6] 检查物理端口死锁 (443/2053 等)...\033[0m"
+    local PORT_CHECK=$(ss -tulpn | grep -E ':80\b|:443\b|:2053\b|:8443\b|:54321\b' 2>/dev/null)
+    if [[ -z "$PORT_CHECK" ]]; then
+        echo -e "\033[1;32m  ✔ 完美：关键端口全部空闲，无任何监听。\033[0m"
+    else
+        echo -e "\033[1;31m  [!] 警告：发现以下端口被占用：\033[0m\n$PORT_CHECK"
+    fi
+
+    echo -e "\n\033[1;36m[2/6] 检查幽灵进程残留...\033[0m"
+    local PROC_CHECK=$(ps aux | grep -E 'xray|sing-box|hysteria' | grep -v grep 2>/dev/null)
+    if [[ -z "$PROC_CHECK" ]]; then
+        echo -e "\033[1;32m  ✔ 完美：无任何代理引擎及僵尸进程存活。\033[0m"
+    else
+        echo -e "\033[1;31m  [!] 警告：发现以下残留进程：\033[0m\n$PROC_CHECK"
+    fi
+
+    echo -e "\n\033[1;36m[3/6] 检查内核 NAT 流量黑洞...\033[0m"
+    local NAT_CHECK=$(iptables -t nat -L PREROUTING -nv 2>/dev/null | grep -i REDIRECT)
+    if [[ -z "$NAT_CHECK" ]]; then
+        echo -e "\033[1;32m  ✔ 完美：底层防火墙转发链纯净，无幽灵跳转。\033[0m"
+    else
+        echo -e "\033[1;31m  [!] 警告：发现残留的流量重定向规则：\033[0m\n$NAT_CHECK"
+    fi
+
+    echo -e "\n\033[1;36m[4/6] 检查 Systemd 服务注册表...\033[0m"
+    local SVC_CHECK=$(systemctl status xray sing-box hysteria 2>&1 | grep -i "active (running)")
+    if [[ -z "$SVC_CHECK" ]]; then
+        echo -e "\033[1;32m  ✔ 完美：历史服务已被彻底剥离系统。\033[0m"
+    else
+        echo -e "\033[1;31m  [!] 警告：系统仍在尝试运行以下服务：\033[0m\n$SVC_CHECK"
+    fi
+
+    echo -e "\n\033[1;36m[5/6] 检查核心文件与配置污染...\033[0m"
+    local FILE_CHECK=$(ls -d /usr/local/etc/xray /etc/sing-box /usr/local/bin/xray /usr/local/bin/sing-box /etc/ddr /etc/hysteria 2>/dev/null)
+    if [[ -z "$FILE_CHECK" ]]; then
+        echo -e "\033[1;32m  ✔ 完美：硬盘相关目录已被彻底粉碎。\033[0m"
+    else
+        echo -e "\033[1;31m  [!] 警告：发现残留文件或目录：\033[0m\n$FILE_CHECK"
+    fi
+
+    echo -e "\n\033[1;36m[6/6] 检查 VPS 外部出站网络健康度...\033[0m"
+    if curl -I -s -m 5 https://www.google.com | head -n 1 | grep -qE "200|301|302"; then
+        echo -e "\033[1;32m  ✔ 完美：服务器出站连通性正常，DNS 解析正常。\033[0m"
+    else
+        echo -e "\033[1;31m  [!] 警告：服务器无法访问外部网络，请检查 GCP 整体出站策略。\033[0m"
+    fi
+
+    echo -e "\n\033[1;33m========================================================\033[0m"
+    read -ep "按回车返回主菜单..."
+}
+
 # ====================================================================
 # [4] 主控制台循环
 # ====================================================================
@@ -428,7 +484,7 @@ while true; do
     systemctl is-active --quiet xray && STATUS="${GREEN}Running (Xray)${NC}" || { systemctl is-active --quiet sing-box && STATUS="${CYAN}Running (Sing-box)${NC}" || STATUS="${RED}Stopped${NC}"; }
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V40 Perfect] ${NC}\n${BLUE}======================================================================${NC}"
+    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V41 Perfect] ${NC}\n${BLUE}======================================================================${NC}"
     echo -e " IP: ${YELLOW}$IPV4${NC} | STATUS: $STATUS $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${YELLOW}[ Xray-core 部署 / Deploy ]${NC}       ${CYAN}[ Sing-box 部署 / Deploy ]${NC}"
     echo -e " ${GREEN}1.${NC} VLESS-Vision (REALITY)          ${GREEN}5.${NC} VLESS-Vision (REALITY)"
@@ -440,14 +496,15 @@ while true; do
     echo -e " ${GREEN}9.${NC}  流量监控与熔断 / Quota Guard    ${GREEN}10.${NC} 网络诊断测速 / Diagnostics"
     echo -e " ${GREEN}11.${NC} VPS 全面优化 / VPS Tuning       ${GREEN}12.${NC} 详细功能说明 / Usage Guide"
     echo -e " ${YELLOW}13.${NC} 全部节点参数 / Export Nodes     ${YELLOW}14.${NC} 源码 OTA 更新 / OTA Update"
-    echo -e " ${RED}15.${NC} 彻底清空卸载 / Clean Purge      ${GREEN}0.${NC}  退出面板 / Exit Dashboard"
+    echo -e " ${RED}15.${NC} 彻底清空卸载 / Clean Purge      ${CYAN}16.${NC} 环境纯净度检查 / Virgin Check"
+    echo -e " ${GREEN}0.${NC}  退出面板 / Exit Dashboard"
     echo -e "${BLUE}======================================================================${NC}"
-    read -ep " 请选择 / Please select [0-15]: " choice
+    read -ep " 请选择 / Please select [0-16]: " choice
     case $choice in
         1|2|3|4) deploy_xray "$([[ $choice == 1 ]] && echo VLESS || [[ $choice == 2 ]] && echo HY2 || [[ $choice == 3 ]] && echo SS || echo ALL)" ;;
         5|6|7|8) deploy_singbox "$([[ $choice == 5 ]] && echo VLESS || [[ $choice == 6 ]] && echo HY2 || [[ $choice == 7 ]] && echo SS || echo ALL)" ;;
         9) setup_quota ;; 10) diagnostics ;; 11) tune_vps ;; 12) show_usage ;; 13) view_config "" ;; 
         14) setup_shortcut "update"; echo -e "OTA 成功。 / OTA Successful."; exit 0 ;;
-        15) clean_uninstall ;; 0) clear; exit 0 ;; *) sleep 1 ;;
+        15) clean_uninstall ;; 16) check_virgin_state ;; 0) clear; exit 0 ;; *) sleep 1 ;;
     esac
 done
