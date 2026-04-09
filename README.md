@@ -1,7 +1,7 @@
 # Aio-box
 
 - **[中文说明](#-中文说明) | [English Description](#-english-description)**
-- **致谢 / Credits:** 感谢 Xray-core 与 Sing-box 提供的强大网络路由与加密核心。
+- **致谢:** 感谢 Xray-core 与 Sing-box 提供的强大网络路由与加密核心。
 - Credits: We would like to thank Xray-core and Sing-box for providing powerful network routing and encryption cores.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
