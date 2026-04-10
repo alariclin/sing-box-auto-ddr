@@ -724,7 +724,7 @@ EOF
 
 show_usage() {
     clear; echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}${GREEN}   Aio-box Ultimate 脚本说明书 / Script Manual${NC}"
+    echo -e "${BOLD}${GREEN}   Aio-box 脚本说明书 / Script Manual${NC}"
     echo -e "${CYAN}======================================================================${NC}"
     
     echo -e "${YELLOW}【一】编排逻辑与架构选择 / Architectural Guide${NC}"
@@ -754,7 +754,7 @@ show_usage() {
 
 update_script() {
     clear; echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}${GREEN}   云端热更新引擎 / OTA Online Sync Subsystem${NC}"
+    echo -e "${BOLD}${GREEN}   云端更新引擎 / OTA Online Sync Subsystem${NC}"
     echo -e "${CYAN}======================================================================${NC}"
     echo -e "${YELLOW}[*] 正在绕过缓存向远端库进行安全握手并同步源码 / Fetching master branch...${NC}"
     
@@ -778,7 +778,7 @@ update_script() {
 clean_uninstall_menu() {
     clear
     echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}${RED}   深度防御式卸载系统 / Uninstallation Subsystem${NC}"
+    echo -e "${BOLD}${RED}   深度卸载系统 / Uninstallation Subsystem${NC}"
     echo -e "${CYAN}======================================================================${NC}"
     echo -e "${YELLOW}1. 完全物理清场 (销毁代理堆栈、配置表、防火墙映射与全局快速访问别名)${NC}"
     echo -e "${YELLOW}2. 保留式软性销毁 (销毁代理堆栈，但留存控制台与环境供随时重构)${NC}"
@@ -794,7 +794,7 @@ clean_uninstall_menu() {
 }
 
 do_cleanup() {
-    clear; echo -e "${RED}⚠️  正在执行外科手术级剥离逻辑... / Executing precision wipe protocol...${NC}"
+    clear; echo -e "${RED}⚠️  正在执行剥离逻辑... / Executing precision wipe protocol...${NC}"
     init_system_environment
     service_manager stop xray sing-box hysteria
     killall -9 xray sing-box hysteria 2>/dev/null || true
@@ -825,7 +825,7 @@ check_virgin_state() {
     clear
     init_system_environment
     echo -e "\n\033[1;33m================================================================\033[0m"
-    echo -e "\033[1;33m       Aio-box 终极异常诊断与环境自愈 (Self-Healing Routine)    \033[0m"
+    echo -e "\033[1;33m       Aio-box 异常诊断与环境自愈 (Self-Healing Routine)    \033[0m"
     echo -e "\033[1;33m================================================================\033[0m\n"
 
     echo -e "\033[1;36m[1/5] 执行内存地址与高优端口锁死检测 / Scanning memory address binding...\033[0m"
@@ -943,7 +943,7 @@ vps_benchmark_menu() {
     echo -e "${BOLD}${GREEN}   本机配置与IP测速纯净度 / Benchmark & IP Check${NC}"
     echo -e "${CYAN}======================================================================${NC}"
     echo -e "${YELLOW}1. 本机配置和测速 (bench.sh) / System Info & Speedtest${NC}"
-    echo -e "${YELLOW}2. 网速与IP纯净度检测 (Check.Place) / IP Quality & Speed${NC}"
+    echo -e "${YELLOW}2. IP纯净度和测速 (Check.Place) / IP Quality & Speed${NC}"
     echo -e "${GREEN}0. 返回主菜单 / Return to Main Menu${NC}"
     echo -e "${CYAN}======================================================================${NC}"
     read -ep " 请选择 / Please select [0-2]: " bench_choice
@@ -981,14 +981,14 @@ while true; do
     
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V56 Absolute Perfect Final] ${NC}\n${BLUE}======================================================================${NC}"
+    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box ] ${NC}\n${BLUE}======================================================================${NC}"
     echo -e " 连通网关: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 物理运行栈: $STATUS_STR $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
-    echo -e " ${YELLOW}[ Xray-core 独立容器部署 ]${NC}            ${CYAN}[ Sing-box 聚合架构部署 ]${NC}"
+    echo -e " ${YELLOW}[ Xray-core 部署 ]${NC}            ${CYAN}[ Sing-box 部署 ]${NC}"
     echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)         ${GREEN}6.${NC} VLESS-Vision (Reality)"
     echo -e " ${GREEN}2.${NC} Shadowsocks                    ${GREEN}7.${NC} Shadowsocks"
-    echo -e " ${GREEN}3.${NC} VLESS + SS 组合集群            ${GREEN}8.${NC} VLESS + SS 组合集群"
+    echo -e " ${GREEN}3.${NC} VLESS + SS-2022 组合            ${GREEN}8.${NC} VLESS + SS-2022 组合"
     echo -e " ${GREEN}4.${NC} Hysteria 2 (Apernet 原生核心)  ${GREEN}9.${NC} Hysteria 2 (聚合版)"
-    echo -e " ${GREEN}5.${NC} 协议全家桶 (混编:Xray+原生Hy2) ${GREEN}10.${NC} 协议全家桶 (纯享:Sing-box)"
+    echo -e " ${GREEN}5.${NC} 协议全家桶 (混编:Xray+原生Hy2) ${GREEN}10.${NC} 协议全家桶 (纯净:Sing-box)"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${GREEN}11.${NC} 本机配置与IP测速纯净度 / Benchmark & IP Check"
     echo -e " ${GREEN}12.${NC} VPS一键优化 / VPS One-Click Tuning"
