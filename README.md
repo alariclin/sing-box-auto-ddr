@@ -179,7 +179,7 @@ sb
 ---
 
 ## 💻 系统要求 / System Requirements
-* **OS: Debian 10+, Ubuntu 20.04+, CentOS 8+, AlmaLinux, Rocky Linux, Alpine Linux (Full Support).
+* OS: Debian 10+, Ubuntu 20.04+, CentOS 8+, AlmaLinux, Rocky Linux, Alpine Linux (Full Support).
 *Init System: Systemd or OpenRC is strictly required for daemon persistence.
 *Network: Dual-stack IPv4 / IPv6 resolution fully supported.
 
