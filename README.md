@@ -73,37 +73,23 @@ sb
 ---
 ### 📋面板菜单速览：
 * 1-10: 核心架构编排 - 分别对应 Xray (1-5) 与 Sing-box (6-10) 的部署组合。
-
 * 11: 系统 Benchmark & IP 审计 - 启动 bench.sh 与 Check.Place 跑分。
-
 * 12: VPS 一键优化 - 物理注入 BBR 算法并提升内核并发句柄。
-
 * 13: 节点参数显示 - 以明文及 Clash Meta YAML 格式输出当前拓扑配置。
-
 * 14: 脚本说明书 - 查阅针对 VLESS-Vision 指纹对齐及 Hy2 证书避坑指南。
-
 * 15: 脚本 OTA 升级 - 热加载 GitHub 最新发行版源码。
-
 * 16: 一键清空卸载 - 执行防御式卸载，物理销毁残留碎片。
-
 * 17: 环境自愈 (Auto-Fix) - 扫描死锁、清理脏路由、连通性探测。
-
 ---
 
 <a name="-faq-cn"></a>
 ### ❓常见问题 (FAQ)
 * Q: VLESS 节点为什么连上后瞬间断开？
-
 * A: 脚本强制启用了 xtls-rprx-vision。客户端严禁开启 Mux（多路复用），伪装指纹（Fingerprint）必须设置为 chrome。
-
 * Q: 为什么 Alpine 系统上优化内核会失败？
-
 * A: 已完美修复此问题。脚本会智能回退并手动注入配置，实现 100% 优化成功率。
-
 * Q: 卸载会损坏 Docker 规则吗？
-
 * A: 绝对不会。脚本采用正则精准锚定清理带有 Aio-box- 注释的规则，不使用野蛮的 iptables -F。
-
 ---
 
 <a name="-english-description"></a>
