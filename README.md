@@ -19,11 +19,11 @@
 > **⚠️ 合规与免责声明 (Disclaimer)**: 本项目仅供网络架构学习、加密协议研究和技术交流使用。严禁用于任何非法用途。用户在使用本脚本时必须严格遵守其所在国家和地区的法律法规，任何因违反法规或不当使用造成的直接/间接后果，由使用者自行承担。
 
 ### 📑 目录
-1. [✨ 核心特性](#-核心特性)
-2. [🏗️ 架构对比](#-架构对比)
-3. [🚀 快速部署](#-快速部署)
-4. [🛠️ 运维与管理](#-运维与管理)
-5. [❓ 常见问题 (FAQ)](#-常见问题)
+1. [✨ 核心特性]
+2. [🏗️ 架构对比]
+3. [🚀 快速部署]
+4. [🛠️ 运维与管理]
+5. [❓ 常见问题 (FAQ)]
 
 ### ✨ 核心特性
 
@@ -88,11 +88,11 @@ sb
 ---
 
 ### 📑 Table of Contents
-1. [✨ Key Features](#-key-features)
-2. [🏗️ Architecture Comparison](#-architecture-comparison)
-3. [🚀 Quick Start](#-quick-start)
-4. [🛠️ Management & Operations](#-management--operations)
-5. [❓ Frequently Asked Questions (FAQ)](#-frequently-asked-questions-faq)
+1. [✨ Key Features]
+2. [🏗️ Architecture Comparison]
+3. [🚀 Quick Start]
+4. [🛠️ Management & Operations]
+5. [❓ Frequently Asked Questions (FAQ)]
 
 ---
 
