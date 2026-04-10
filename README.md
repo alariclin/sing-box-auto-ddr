@@ -52,13 +52,13 @@ sb
 Disclaimer: This project is intended strictly for educational, research, and technical exchange purposes. Users must comply with the laws and regulations of their respective countries and regions when using this script. The user bears full responsibility for any consequences arising from improper use.
 
 ### ✨ Key Features
-* **Modern Network Protocol Integration: Automates the deployment of next-generation routing cores (supporting protocols like VLESS, Hysteria 2, and Shadowsocks), achieving efficient port multiplexing (e.g., concurrent TCP and UDP on a single port) to optimize connection efficiency.
-* **High Availability & Process Isolation: Offers flexible Dual-Core (Hybrid) or Single-Core (Sing-box) deployment modes. The script logically isolates different service processes to effectively prevent port conflicts (deadlocks) and ensure continuous service operation.
-* **Auto-Fix Environmental Diagnostics: Features an innovative white-box diagnostic mechanism. With a single click, it identifies and purges zombie processes, resolves port deadlocks, clears erroneous network forwarding rules, and restores the system's network configuration to a pristine state.
-* **Linux Kernel Performance Unleashed: Includes an automated tuning module that enables the BBR congestion control algorithm and intelligently elevates system resource limits (e.g., adjusting file descriptors fs.file-max and ulimit to their maximum theoretical values) to maximize network throughput.
-* **Comprehensive Benchmarking: Integrates hardware performance testing (bench.sh) and global IP quality/reputation auditing tools to help users monitor their server's performance and status.
-* **Seamless OTA Updates & Secure Uninstallation: Supports real-time retrieval and updating of the latest script code from GitHub. Provides two uninstallation modes: a "zero-residue nuclear wipe" and a "soft uninstall" that retains environment variables, ensuring system integrity.
-* **Cross-Platform Daemon Compatibility: Intelligently identifies and seamlessly integrates with major Linux initialization systems (Systemd and OpenRC), offering broad support for mainstream Linux distributions and lightweight systems (such as Alpine).
+* Modern Network Protocol Integration: Automates the deployment of next-generation routing cores (supporting protocols like VLESS, Hysteria 2, and Shadowsocks), achieving efficient port multiplexing (e.g., concurrent TCP and UDP on a single port) to optimize connection efficiency.
+* High Availability & Process Isolation: Offers flexible Dual-Core (Hybrid) or Single-Core (Sing-box) deployment modes. The script logically isolates different service processes to effectively prevent port conflicts (deadlocks) and ensure continuous service operation.
+* Auto-Fix Environmental Diagnostics: Features an innovative white-box diagnostic mechanism. With a single click, it identifies and purges zombie processes, resolves port deadlocks, clears erroneous network forwarding rules, and restores the system's network configuration to a pristine state.
+* Linux Kernel Performance Unleashed: Includes an automated tuning module that enables the BBR congestion control algorithm and intelligently elevates system resource limits (e.g., adjusting file descriptors fs.file-max and ulimit to their maximum theoretical values) to maximize network throughput.
+* Comprehensive Benchmarking: Integrates hardware performance testing (bench.sh) and global IP quality/reputation auditing tools to help users monitor their server's performance and status.
+* Seamless OTA Updates & Secure Uninstallation: Supports real-time retrieval and updating of the latest script code from GitHub. Provides two uninstallation modes: a "zero-residue nuclear wipe" and a "soft uninstall" that retains environment variables, ensuring system integrity.
+* Cross-Platform Daemon Compatibility: Intelligently identifies and seamlessly integrates with major Linux initialization systems (Systemd and OpenRC), offering broad support for mainstream Linux distributions and lightweight systems (such as Alpine).
 
 ### 🚀 Quick Start
 
