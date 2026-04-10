@@ -167,13 +167,13 @@ The console provides two top-tier deployment architectures to meet different res
 ```bash
 sudo bash -c "$(curl -Ls https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh)"
 ```
+<a name="-management--operations"></a>
 #### 🛠️ Management
 Once installation is complete, simply enter the following command in the terminal to instantly launch the Control Panel (offline launch supported):
 ```bash
 sb
 ```
 ---
-<a name="-management--operations"></a>
 ### Panel Menu Overview：
 1-10: Core Architecture Orchestration - Mirror-level deployment options for Xray-core (1-5) and Sing-box (6-10)。
 
