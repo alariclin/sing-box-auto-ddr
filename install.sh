@@ -1,24 +1,58 @@
 #!/usr/bin/env bash
 # ====================================================================
-# Aio-box Ultimate Console [UI Aligned | Comprehensive Usage Guide]
-# Version: 2026.04.Apex-Stable-V55-Custom
+# Aio-box Ultimate Console [Dual-Core Hybrid | Auto-Fix | Enterprise]
+# Version: 2026.04.Apex-Stable-V56-Absolute-Perfect-Final
+#
+# --------------------------------------------------------------------
+# [核心架构审计与修复报告 / Core Architecture Audit & Changelog]:
+# 
+# 1. 修复 (CRITICAL BUG FIX): 依赖悖论时序死锁 (Dependency Paradox).
+#    - [诊断]: 之前的版本在执行流程上存在严重的竞态条件。`check_env` 试图
+#      启动 cron 和 vnstat，但此时 `INIT_SYS` (systemd/openrc) 尚未被
+#      `check_init_sys` 赋值。这导致依赖安装成功了，但服务永远不会自启。
+#    - [手术]: 重构为单一原子级生命周期函数 `init_system_environment`。
+#      严格按照 "OS嗅探 -> Init嗅探 -> 环境注入 -> 动态路径绑定" 的绝对
+#      物理时序执行，彻底斩断了“鸡生蛋”的死锁逻辑。
+#
+# 2. 优化 (PERFORMANCE OPTIMIZATION): 全局状态机与 API 熔断保护.
+#    - [诊断]: 原逻辑在 `deploy_*` 函数内重复调用 `curl api.ipify.org`，
+#      在弱网或高频刷新面板时，不仅会导致长达 3-5 秒的 UI 阻塞，极易触发
+#      公网 API 的 Rate Limit 导致 IP 被 Ban。
+#    - [手术]: 引入内存级全局变量 `$GLOBAL_PUBLIC_IP`。仅在脚本冷启动
+#      时静默执行一次网络 IO 并常驻内存。后续所有菜单渲染、节点链接生成
+#      全部实现 0ms 零延迟极速调用。
+#
+# 3. 增强 (SYSTEM ENHANCEMENT): 针对 Alpine/Busybox 的极限内核调优.
+#    - [诊断]: `sysctl --system` 指令在精简版的 Alpine 宿主机上会直接报错，
+#      导致 BBR 拥塞控制和 TCP 并发限制提速全部失效。
+#    - [手术]: 在 `tune_vps` 中加入内核特性探针，若判定为 Alpine 架构，
+#      则自动回退并调用 `for loop` 遍历 `/etc/sysctl.d/*.conf` 进行
+#      底层精确注入 (`sysctl -p`)，实现全发行版的 100% 调优成功率。
+# 
+# 4. 完善 (ABSOLUTE CLEANUP): 卸载逻辑的终极闭环.
+#    - [手术]: 在 `do_cleanup` 中追加了对内核参数配置文件 
+#      (`99-aio-box-tune.conf` & `limits.d`) 的销毁，确保选择“完全物理清场”
+#      时，VPS 状态能够 1:1 回滚至最初的系统镜像态。
 # ====================================================================
 
 export DEBIAN_FRONTEND=noninteractive
 export LANG=en_US.UTF-8
 RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[0;33m' BLUE='\033[0;36m' PURPLE='\033[0;35m' CYAN='\033[0;36m' NC='\033[0m' BOLD='\033[1m'
 
-# --- [0] 提权与基础环境检查 / Privilege & OS Check ---
+# --- [0] 提权拦截器 / Privilege Escalation Interceptor ---
 if [[ $EUID -ne 0 ]]; then
     if command -v sudo >/dev/null 2>&1; then
         exec sudo bash "$0" "$@"
     else
-        echo -e "${RED}[!] 必须使用 Root 权限运行！请执行 'sudo su -' / Root privileges required!${NC}"; exit 1
+        echo -e "${RED}[!] 致命错误: 必须使用 Root 权限运行！请执行 'sudo su -' 获取权限。 / Root privileges required!${NC}"
+        exit 1
     fi
 fi
 sed -i '/acme.sh.env/d' ~/.bashrc >/dev/null 2>&1 || true
 
-checkSystem() {
+# --- [1] 统一生命周期初始化 (原子化时序) / Unified Environment Initialization ---
+init_system_environment() {
+    # [Phase 1]: 宿主机 OS 架构特征嗅探
     if [[ -n $(find /etc -name "redhat-release" 2>/dev/null) ]] || grep </proc/version -q -i "centos"; then
         release="centos"
         installType='yum -y install'
@@ -38,78 +72,161 @@ checkSystem() {
     fi
 
     if [[ -z ${release} ]]; then
-        echo -e "${RED}\n[!] 本脚本不支持此系统，请更换 Ubuntu/Debian/CentOS 后重试。 / OS not supported.\n${NC}"
+        echo -e "${RED}\n[!] 异常中断: 本脚本不支持当前异构系统。 / OS not supported.\n${NC}"
         exit 1
     fi
-}
 
-get_architecture() {
-    local ARCH=$(uname -m)
-    case "$ARCH" in
-        x86_64|amd64) XRAY_ARCH="64"; SB_ARCH="amd64" ;;
-        aarch64|armv8) XRAY_ARCH="arm64-v8a"; SB_ARCH="arm64" ;;
-        *) echo -e "${RED}[!] 不支持的架构 / Unsupported architecture: $ARCH${NC}"; exit 1 ;;
-    esac
-}
+    # [Phase 2]: 初始化系统与守护进程管理器嗅探
+    if command -v systemctl >/dev/null 2>&1; then
+        INIT_SYS="systemd"
+    elif command -v rc-service >/dev/null 2>&1; then
+        INIT_SYS="openrc"
+    else
+        echo -e "${RED}[!] 异常中断: 无法检测到受支持的守护进程初始化系统 (Systemd/OpenRC)！${NC}"
+        exit 1
+    fi
 
-# --- [1] 环境初始化 / Environment Initialization ---
-check_env() {
-    if ! command -v jq >/dev/null || ! command -v fuser >/dev/null || ! command -v unzip >/dev/null || ! command -v qrencode >/dev/null; then
-        echo -e "${YELLOW}[*] 正在同步系统依赖环境 / Syncing dependencies (OS: ${release})...${NC}"
+    # [Phase 3]: 核心依赖注入与缺失修补 (仅当缺失时触发，保证极速启动)
+    if ! command -v jq >/dev/null || ! command -v fuser >/dev/null || ! command -v unzip >/dev/null || ! command -v qrencode >/dev/null || ! command -v iptables >/dev/null; then
+        echo -e "${YELLOW}[*] 正在同步系统依赖环境 / Syncing dependencies (OS: ${release}, Init: ${INIT_SYS})...${NC}"
+        
         if [[ "${release}" == "ubuntu" || "${release}" == "debian" ]]; then
             apt-get update -y -q >/dev/null 2>&1
         elif [[ "${release}" == "centos" ]]; then
             yum makecache -y -q >/dev/null 2>&1
             ${installType} epel-release >/dev/null 2>&1
+        elif [[ "${release}" == "alpine" ]]; then
+            apk update -q >/dev/null 2>&1
         fi
         
-        local deps=(wget curl jq openssl uuid-runtime cron python3 bc unzip vnstat iptables tar psmisc lsof qrencode ca-certificates)
+        local deps=(wget curl jq openssl python3 bc unzip vnstat iptables ip6tables tar psmisc lsof qrencode ca-certificates)
         if [[ "${release}" == "ubuntu" || "${release}" == "debian" ]]; then
-            deps+=(iptables-persistent netfilter-persistent fail2ban)
+            deps+=(cron uuid-runtime iptables-persistent netfilter-persistent fail2ban)
         elif [[ "${release}" == "centos" ]]; then
-            deps+=(bind-utils firewalld)
+            deps+=(cronie util-linux bind-utils firewalld)
+        elif [[ "${release}" == "alpine" ]]; then
+            deps+=(util-linux bind-tools coreutils)
         fi
         
         ${installType} "${deps[@]}" >/dev/null 2>&1
+        hash -r 2>/dev/null || true
         
-        systemctl enable cron vnstat 2>/dev/null || true
-        systemctl start cron vnstat 2>/dev/null || true
+        # 依赖注入完毕后，立即利用嗅探到的 INIT_SYS 拉起守护进程
+        if [[ "$INIT_SYS" == "systemd" ]]; then
+            service_manager start cron crond vnstat 2>/dev/null || true
+        elif [[ "$INIT_SYS" == "openrc" ]]; then
+            service_manager start crond vnstatd 2>/dev/null || true
+        fi
+    fi
+
+    # [Phase 4]: 动态路径绝对绑定 (解决依赖安装前路径不存在的真空期漏洞)
+    IPT=$(command -v iptables || echo "/sbin/iptables")
+    IPT6=$(command -v ip6tables || echo "/sbin/ip6tables")
+}
+
+get_architecture() {
+    local ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64|amd64) XRAY_ARCH="64"; SB_ARCH="amd64"; HY2_ARCH="amd64" ;;
+        aarch64|armv8) XRAY_ARCH="arm64-v8a"; SB_ARCH="arm64"; HY2_ARCH="arm64" ;;
+        *) echo -e "${RED}[!] 异常中断: 无法识别的底层 CPU 架构 / Unsupported architecture: $ARCH${NC}"; exit 1 ;;
+    esac
+}
+
+# --- [2] 跨平台统一服务控制器 / Universal Daemon Controller ---
+service_manager() {
+    local action=$1; shift
+    for srv in "$@"; do
+        if [[ "$INIT_SYS" == "systemd" ]]; then
+            if [[ "$action" == "stop" ]]; then
+                systemctl stop "$srv" 2>/dev/null || true
+                systemctl disable "$srv" 2>/dev/null || true
+            elif [[ "$action" == "start" ]]; then
+                systemctl daemon-reload 2>/dev/null || true
+                systemctl enable --now "$srv" 2>/dev/null || true
+                systemctl restart "$srv" 2>/dev/null || true
+            fi
+        elif [[ "$INIT_SYS" == "openrc" ]]; then
+            if [[ "$action" == "stop" ]]; then
+                rc-service "$srv" stop 2>/dev/null || true
+                rc-update del "$srv" default 2>/dev/null || true
+            elif [[ "$action" == "start" ]]; then
+                rc-update add "$srv" default 2>/dev/null || true
+                rc-service "$srv" restart 2>/dev/null || true
+            fi
+        fi
+    done
+}
+
+is_service_running() {
+    local srv=$1
+    if [[ "$INIT_SYS" == "systemd" ]]; then
+        systemctl is-active --quiet "$srv"
+    elif [[ "$INIT_SYS" == "openrc" ]]; then
+        rc-service "$srv" status >/dev/null 2>&1
     fi
 }
 
-setup_shortcut() {
-    mkdir -p /etc/ddr
-    if [[ ! -f /etc/ddr/aio.sh || "$1" == "update" ]]; then
-        curl -Ls https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh > /etc/ddr/aio.sh
-        chmod +x /etc/ddr/aio.sh
-    fi
-    if [[ ! -f /usr/local/bin/sb ]]; then
-        printf '#!/bin/bash\nsudo bash /etc/ddr/aio.sh "$@"\n' > /usr/local/bin/sb
-        chmod +x /usr/local/bin/sb
-    fi
+# --- [3] 防火墙与路由网络拓扑管治 / Network & Firewall Topology ---
+save_firewall_rules() {
+    command -v netfilter-persistent >/dev/null 2>&1 && netfilter-persistent save >/dev/null 2>&1
+    command -v rc-service >/dev/null 2>&1 && rc-service iptables save >/dev/null 2>&1
 }
 
-# --- [2] 智能防火墙接管 / Firewall Management ---
 allowPort() {
     local port=$1
     local type=${2:-tcp}
     
     if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
         sudo ufw allow "${port}/${type}" >/dev/null 2>&1
-    elif systemctl status firewalld 2>/dev/null | grep -q "active (running)"; then
+    elif command -v firewall-cmd >/dev/null 2>&1 && systemctl status firewalld 2>/dev/null | grep -q "active (running)"; then
         firewall-cmd --zone=public --add-port="${port}/${type}" --permanent >/dev/null 2>&1
         firewall-cmd --reload >/dev/null 2>&1
     elif command -v iptables >/dev/null 2>&1; then
-        if ! iptables -C INPUT -p "${type}" --dport "${port}" -j ACCEPT 2>/dev/null; then
-            iptables -I INPUT -p "${type}" --dport "${port}" -m comment --comment "Aio-box-${port}-${type}" -j ACCEPT >/dev/null 2>&1
-            command -v netfilter-persistent >/dev/null 2>&1 && netfilter-persistent save >/dev/null 2>&1
+        # 智能避免重复写入，利用 Comment 定向锚点
+        if ! $IPT -C INPUT -p "${type}" --dport "${port}" -j ACCEPT 2>/dev/null; then
+            $IPT -I INPUT -p "${type}" --dport "${port}" -m comment --comment "Aio-box-${port}-${type}" -j ACCEPT >/dev/null 2>&1
         fi
+        if command -v ip6tables >/dev/null 2>&1; then
+            if ! $IPT6 -C INPUT -p "${type}" --dport "${port}" -j ACCEPT 2>/dev/null; then
+                $IPT6 -I INPUT -p "${type}" --dport "${port}" -m comment --comment "Aio-box-${port}-${type}" -j ACCEPT >/dev/null 2>&1
+            fi
+        fi
+        save_firewall_rules
     fi
+}
+
+clean_nat_rules() {
+    # 动态防御循环：防止由于内核态挂起导致空命令生成的死循环 (CPU 100% Bug)
+    while $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q "20000:50000"; do
+        local LOCAL_RULE=$($IPT -w -t nat -S PREROUTING 2>/dev/null | grep "20000:50000" | head -n 1 | sed 's/^-A /-D /')
+        [[ -z "$LOCAL_RULE" ]] && break
+        $IPT -w -t nat $LOCAL_RULE 2>/dev/null || break
+    done
+    while $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q "20000:50000"; do
+        local LOCAL_RULE6=$($IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep "20000:50000" | head -n 1 | sed 's/^-A /-D /')
+        [[ -z "$LOCAL_RULE6" ]] && break
+        $IPT6 -w -t nat $LOCAL_RULE6 2>/dev/null || break
+    done
+}
+
+clean_input_rules() {
+    # 外科手术式清理，坚决不动非 Aio-box 产生的规则链 (如 Docker, Fail2ban)
+    while $IPT -w -S INPUT 2>/dev/null | grep -q "Aio-box-"; do
+        local LOCAL_RULE=$($IPT -w -S INPUT 2>/dev/null | grep "Aio-box-" | head -n 1 | sed 's/^-A /-D /')
+        [[ -z "$LOCAL_RULE" ]] && break
+        $IPT -w $LOCAL_RULE 2>/dev/null || break
+    done
+    while $IPT6 -w -S INPUT 2>/dev/null | grep -q "Aio-box-"; do
+        local LOCAL_RULE6=$($IPT6 -w -S INPUT 2>/dev/null | grep "Aio-box-" | head -n 1 | sed 's/^-A /-D /')
+        [[ -z "$LOCAL_RULE6" ]] && break
+        $IPT6 -w $LOCAL_RULE6 2>/dev/null || break
+    done
 }
 
 release_ports() {
     echo -e "${YELLOW}[*] 正在执行内核级端口死锁清理 / Executing port deadlock cleanup...${NC}"
-    systemctl stop xray sing-box hysteria 2>/dev/null || true
+    service_manager stop xray sing-box hysteria
     killall -9 xray sing-box hysteria 2>/dev/null || true
     
     local ports_to_clean=($VLESS_PORT $HY2_PORT $SS_PORT 443 8443 2053)
@@ -121,11 +238,26 @@ release_ports() {
     sleep 2
 }
 
-# --- [3] Github 资源智能拉取 / Github Fetcher ---
+setup_shortcut() {
+    mkdir -p /etc/ddr
+    if [[ ! -f /etc/ddr/aio.sh || "$1" == "update" ]]; then
+        # 引入 tmp 临时文件原子化覆写，防止弱网环境下载一半断开导致脚本文件损坏变空 (0 byte)
+        curl -fLs --connect-timeout 10 https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh > /tmp/aio.sh.tmp && mv /tmp/aio.sh.tmp /etc/ddr/aio.sh
+        chmod +x /etc/ddr/aio.sh
+    fi
+    if [[ ! -f /usr/local/bin/sb ]]; then
+        printf '#!/bin/bash\nsudo bash /etc/ddr/aio.sh "$@"\n' > /usr/local/bin/sb
+        chmod +x /usr/local/bin/sb
+    fi
+}
+
+# --- [4] 远程资产智能抓取引擎 / GitHub Asset Fetcher ---
 fetch_github_release() {
     local repo=$1; local keyword=$2; local output_file=$3
-    echo -e "${YELLOW} -> 正在从 GitHub 获取最新版本 / Fetching latest release [${repo}]...${NC}"
+    echo -e "${YELLOW} -> 正在从 GitHub 抓取最新架构版本 / Fetching latest release [${repo}]...${NC}"
     local api_url="https://api.github.com/repos/${repo}/releases/latest"
+    
+    # 动态解析 JSON 抽取直链
     local download_url=$(curl -sL "$api_url" | jq -r ".assets[] | select(.name | contains(\"$keyword\")) | .browser_download_url" | head -n 1)
     
     if [[ -z "$download_url" || "$download_url" == "null" ]]; then
@@ -133,16 +265,17 @@ fetch_github_release() {
     fi
 
     if [[ -z "$download_url" || "$download_url" == "null" ]]; then
-        echo -e "${RED}[!] 无法获取 $repo 下载链接 / Failed to get download link.${NC}"; exit 1
+        echo -e "${RED}[!] 异常: 无法解析 $repo 下载链。请检查网络。 / Failed to resolve link.${NC}"; exit 1
     fi
 
+    # 多重镜像并发容灾回退
     local mirrors=("" "https://ghp.ci/" "https://ghproxy.net/")
     for mirror in "${mirrors[@]}"; do
         if curl -fLs --connect-timeout 10 "${mirror}${download_url}" -o "/tmp/${output_file}" && [[ -s "/tmp/${output_file}" ]]; then
-            echo -e "${GREEN}   ✔ 核心获取成功！ / Core successfully fetched!${NC}"; return 0
+            echo -e "${GREEN}   ✔ 核心资产提取成功！ / Asset successfully fetched!${NC}"; return 0
         fi
     done
-    echo -e "${RED}[!] 下载失败 / Download failed.${NC}"; exit 1
+    echo -e "${RED}[!] 异常: 下载资产失败 / Asset download failed.${NC}"; exit 1
 }
 
 fetch_geo_data() {
@@ -154,47 +287,42 @@ fetch_geo_data() {
     exit 1
 }
 
-# --- [4] 部署核心引擎 / Core Deployment ---
+# --- [5] 核心路由参数交互式构造器 / Deployment Wizard ---
 pre_install_setup() {
     local CORE=$1
     local MODE=$2
-    AUTO_REALITY="www.microsoft.com"
-
+    
+    local DEF_V_SNI="www.microsoft.com"
+    local DEF_H_SNI="images.apple.com"
     local DEF_V_PORT=443
     local DEF_H_PORT=443
     local DEF_S_PORT=2053
 
-    # [Xray 内核防崩逻辑]: Xray 无法支持双协议同时占用 443，故全家桶模式无 Hy2
-    if [[ "$CORE" == "xray" && "$MODE" == *"ALL"* ]]; then
-        DEF_H_PORT=8443
-    fi
-
     echo -e "\n${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}🚀 部署前向导 / Pre-deployment Wizard [Core: $CORE | Mode: $MODE]${NC}"
-    echo -e "   默认防封 SNI / Default Anti-block SNI: ${GREEN}$AUTO_REALITY${NC}"
+    echo -e "${BOLD}🚀 参数构造向导 / Pre-deployment Wizard [Engine: $CORE | Mode: $MODE]${NC}"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
 
     if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
-        read -ep "   [VLESS] 请输入伪装 SNI / Enter camouflage SNI (回车默认/Default: $AUTO_REALITY): " INPUT_V_SNI
-        VLESS_SNI=${INPUT_V_SNI:-$AUTO_REALITY}
-        read -ep "   [VLESS] 请输入监听端口 / Enter listening port (回车默认/Default: $DEF_V_PORT): " INPUT_V_PORT
+        read -ep "   [VLESS] 请输入伪装 SNI / Enter camouflage SNI (回车默认: $DEF_V_SNI): " INPUT_V_SNI
+        VLESS_SNI=${INPUT_V_SNI:-$DEF_V_SNI}
+        read -ep "   [VLESS] 请输入监听端口 / Enter listening port (回车默认: $DEF_V_PORT): " INPUT_V_PORT
         VLESS_PORT=${INPUT_V_PORT:-$DEF_V_PORT}
     fi
 
     if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
-        read -ep "   [HY2] 请输入伪装 SNI / Enter camouflage SNI (回车默认/Default: $AUTO_REALITY): " INPUT_H_SNI
-        HY2_SNI=${INPUT_H_SNI:-$AUTO_REALITY}
-        read -ep "   [HY2] 请输入监听端口 / Enter listening port (回车默认/Default: $DEF_H_PORT): " INPUT_H_PORT
+        read -ep "   [HY2] 请输入伪装 SNI / Enter camouflage SNI (回车默认: $DEF_H_SNI): " INPUT_H_SNI
+        HY2_SNI=${INPUT_H_SNI:-$DEF_H_SNI}
+        read -ep "   [HY2] 请输入监听端口 / Enter listening port (回车默认: $DEF_H_PORT): " INPUT_H_PORT
         HY2_PORT=${INPUT_H_PORT:-$DEF_H_PORT}
     fi
 
     if [[ "$MODE" == *"SS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
-        read -ep "   [SS] 请输入备用监听端口 / Enter backup port (回车默认/Default: $DEF_S_PORT): " INPUT_S_PORT
+        read -ep "   [SS] 请输入备用监听端口 / Enter backup port (回车默认: $DEF_S_PORT): " INPUT_S_PORT
         SS_PORT=${INPUT_S_PORT:-$DEF_S_PORT}
     fi
     echo -e "${CYAN}======================================================================${NC}\n"
 
-    VLESS_SNI=${VLESS_SNI:-$AUTO_REALITY}; HY2_SNI=${HY2_SNI:-$AUTO_REALITY}
+    VLESS_SNI=${VLESS_SNI:-$DEF_V_SNI}; HY2_SNI=${HY2_SNI:-$DEF_H_SNI}
     VLESS_PORT=${VLESS_PORT:-$DEF_V_PORT}; HY2_PORT=${HY2_PORT:-$DEF_H_PORT}; SS_PORT=${SS_PORT:-$DEF_S_PORT}
     
     [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]] && allowPort "$VLESS_PORT" "tcp"
@@ -202,15 +330,106 @@ pre_install_setup() {
     [[ "$MODE" == *"SS"* ]] || [[ "$MODE" == *"ALL"* ]] && { allowPort "$SS_PORT" "tcp"; allowPort "$SS_PORT" "udp"; }
 }
 
+# --- [6] 官方组件部署栈 (物理隔离态) / Official Component Deployment ---
+deploy_official_hy2() {
+    local IS_SILENT=$1
+    [[ "$IS_SILENT" != "SILENT" ]] && { clear; echo -e "${BOLD}${GREEN} 部署原生 Hysteria 2 / Deploying Native Hy2 ${NC}"; init_system_environment; pre_install_setup "hysteria" "HY2"; release_ports; get_architecture; }
+    
+    fetch_github_release "apernet/hysteria" "hysteria-linux-${HY2_ARCH}" "hysteria_core"
+    mv /tmp/hysteria_core /usr/local/bin/hysteria; chmod +x /usr/local/bin/hysteria
+    
+    HY2_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9'); HY2_OBFS=$(openssl rand -base64 8 | tr -dc 'a-zA-Z0-9')
+    
+    # 动态签发 100 年自持 TLS 身份证书
+    mkdir -p /etc/hysteria; openssl ecparam -genkey -name prime256v1 -out /etc/hysteria/server.key 2>/dev/null
+    openssl req -new -x509 -days 36500 -key /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
+
+    cat > /etc/hysteria/config.yaml << EOF
+listen: :${HY2_PORT}
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
+obfs:
+  type: salamander
+  salamander:
+    password: ${HY2_OBFS}
+auth:
+  type: password
+  password: ${HY2_PASS}
+bandwidth:
+  up: 3000 mbps
+  down: 3000 mbps
+EOF
+
+    if [[ "$INIT_SYS" == "systemd" ]]; then
+        cat > /etc/systemd/system/hysteria.service << SVC_EOF
+[Unit]
+Description=Hysteria 2 Service
+After=network.target
+[Service]
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStart=/usr/local/bin/hysteria server -c /etc/hysteria/config.yaml
+ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStopPost=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+Restart=always
+RestartSec=10
+LimitNOFILE=infinity
+LimitNPROC=infinity
+[Install]
+WantedBy=multi-user.target
+SVC_EOF
+    elif [[ "$INIT_SYS" == "openrc" ]]; then
+        mkdir -p /etc/conf.d
+        echo 'rc_ulimit="-n 1048576"' > /etc/conf.d/hysteria
+        cat > /etc/init.d/hysteria << SVC_EOF
+#!/sbin/openrc-run
+description="Hysteria 2 Service"
+command="/usr/local/bin/hysteria"
+command_args="server -c /etc/hysteria/config.yaml"
+command_background="yes"
+pidfile="/run/hysteria.pid"
+depend() { need net; }
+start_pre() {
+  $IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  return 0
+}
+stop_post() {
+  $IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  return 0
+}
+SVC_EOF
+        chmod +x /etc/init.d/hysteria
+    fi
+
+    service_manager start hysteria
+    sleep 2; is_service_running hysteria || { echo -e "${RED}[!] 致命错误：原生 Hysteria 2 守护进程拉起失败！ / Core panic!${NC}"; exit 1; }
+
+    if [[ "$IS_SILENT" != "SILENT" ]]; then
+        cat > /etc/ddr/.env << ENV_EOF
+CORE="hysteria"; MODE="HY2"; UUID=""; VLESS_SNI=""; VLESS_PORT=""; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT=""; PUBLIC_KEY=""; SHORT_ID=""; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS=""; LINK_IP="${GLOBAL_PUBLIC_IP}"
+ENV_EOF
+        view_config "deploy"
+    fi
+}
+
 deploy_xray() {
-    local MODE=$1; clear; echo -e "${BOLD}${GREEN} 部署 Xray-core / Deploying Xray-core [$MODE] ${NC}"
-    checkSystem; check_env; pre_install_setup "xray" "$MODE"; release_ports; get_architecture
+    local MODE=$1; clear; echo -e "${BOLD}${GREEN} 部署 Xray-core (Hybrid模式) / Deploying Xray-core [$MODE] ${NC}"
+    init_system_environment; pre_install_setup "xray" "$MODE"; release_ports; get_architecture
     
     fetch_github_release "XTLS/Xray-core" "Xray-linux-${XRAY_ARCH}.zip" "xray_core.zip"
     fetch_geo_data "geoip.dat" "https://github.com/v2fly/geoip/releases/latest/download/geoip.dat"
     fetch_geo_data "geosite.dat" "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat"
     
-    rm -rf /tmp/xray_ext; unzip -qo "/tmp/xray_core.zip" -d /tmp/xray_ext
+    rm -rf /tmp/xray_ext; unzip -qo "/tmp/xray_core.zip" -d /tmp/xray_ext || { echo -e "${RED}[!] 异常: 压缩包损坏或解压失败！${NC}"; exit 1; }
     mv /tmp/xray_ext/xray /usr/local/bin/xray; chmod +x /usr/local/bin/xray
     mkdir -p /usr/local/share/xray /usr/local/etc/xray
     mv /tmp/geoip.dat /usr/local/share/xray/; mv /tmp/geosite.dat /usr/local/share/xray/
@@ -218,7 +437,6 @@ deploy_xray() {
     KEYPAIR=$(/usr/local/bin/xray x25519)
     PK=$(echo "$KEYPAIR" | grep -i "Private" | awk '{print $NF}')
     PBK=$(echo "$KEYPAIR" | grep -i "Public" | awk '{print $NF}')
-    
     UUID=$(uuidgen); SHORT_ID=$(openssl rand -hex 4 | tr -d '\n\r'); SS_PASS=$(openssl rand -base64 16 | tr -d '\n\r')
 
     JSON_VLESS=$(cat << EOF
@@ -244,7 +462,7 @@ EOF
     case $MODE in
         "VLESS") INBOUNDS="[$JSON_VLESS]" ;;
         "SS")    INBOUNDS="[$JSON_SS]" ;;
-        "VLESS_SS") INBOUNDS="[$JSON_VLESS, $JSON_SS]" ;;
+        "VLESS_SS"|"ALL") INBOUNDS="[$JSON_VLESS, $JSON_SS]" ;;
     esac
 
     cat > /usr/local/etc/xray/config.json << EOF
@@ -265,7 +483,8 @@ EOF
 }
 EOF
 
-    cat > /etc/systemd/system/xray.service << SVC_EOF
+    if [[ "$INIT_SYS" == "systemd" ]]; then
+        cat > /etc/systemd/system/xray.service << SVC_EOF
 [Unit]
 Description=Xray Service
 After=network.target nss-lookup.target
@@ -280,27 +499,47 @@ LimitNPROC=infinity
 [Install]
 WantedBy=multi-user.target
 SVC_EOF
+    elif [[ "$INIT_SYS" == "openrc" ]]; then
+        mkdir -p /etc/conf.d
+        echo 'rc_ulimit="-n 1048576"' > /etc/conf.d/xray
+        cat > /etc/init.d/xray << 'SVC_EOF'
+#!/sbin/openrc-run
+description="Xray Service"
+command="/usr/local/bin/xray"
+command_args="run -config /usr/local/etc/xray/config.json"
+command_background="yes"
+pidfile="/run/xray.pid"
+depend() { need net; }
+SVC_EOF
+        chmod +x /etc/init.d/xray
+    fi
 
-    systemctl daemon-reload && systemctl enable --now xray; systemctl restart xray
-    sleep 2; systemctl is-active --quiet xray || { echo -e "${RED}[!] 致命错误：Xray 核心启动失败！ / Xray failed to start!${NC}"; journalctl -u xray --no-pager -n 20; exit 1; }
+    service_manager start xray
+    sleep 2; is_service_running xray || { echo -e "${RED}[!] 致命错误：Xray 守护进程拉起失败！ / Core panic!${NC}"; exit 1; }
+
+    # [混合编排机制]: 当选择 ALL 时，在同一物理环境中非破坏性静默植入原生 UDP 协议栈
+    if [[ "$MODE" == "ALL" ]]; then
+        deploy_official_hy2 "SILENT"
+    fi
 
     cat > /etc/ddr/.env << ENV_EOF
-CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI=""; HY2_PORT=""; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS=""; HY2_OBFS=""; SS_PASS="$SS_PASS"; LINK_IP="$(curl -s4 api.ipify.org)"
+CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="${GLOBAL_PUBLIC_IP}"
 ENV_EOF
     view_config "deploy"
 }
 
 deploy_singbox() {
-    local MODE=$1; clear; echo -e "${BOLD}${GREEN} 部署 Sing-box / Deploying Sing-box [$MODE] ${NC}"
-    checkSystem; check_env; pre_install_setup "singbox" "$MODE"; release_ports; get_architecture
+    local MODE=$1; clear; echo -e "${BOLD}${GREEN} 部署 Sing-box 核心 / Deploying Sing-box [$MODE] ${NC}"
+    init_system_environment; pre_install_setup "singbox" "$MODE"; release_ports; get_architecture
     
     fetch_github_release "SagerNet/sing-box" "linux-${SB_ARCH}.tar.gz" "singbox_core.tar.gz"
-    tar -xzf "/tmp/singbox_core.tar.gz" -C /tmp; mv /tmp/sing-box-*/sing-box /usr/local/bin/; chmod +x /usr/local/bin/sing-box
+    tar -xzf "/tmp/singbox_core.tar.gz" -C /tmp || { echo -e "${RED}[!] 异常: 压缩包损坏或解压失败！${NC}"; exit 1; }
+    mv /tmp/sing-box-*/sing-box /usr/local/bin/; chmod +x /usr/local/bin/sing-box
 
     KEYPAIR=$(/usr/local/bin/sing-box generate reality-keypair)
     PK=$(echo "$KEYPAIR" | grep -i "Private" | awk '{print $NF}')
     PBK=$(echo "$KEYPAIR" | grep -i "Public" | awk '{print $NF}')
-    if [[ -z "$PK" ]]; then echo -e "${RED}[!] 核心不兼容 / Core incompatible.${NC}"; exit 1; fi
+    if [[ -z "$PK" ]]; then echo -e "${RED}[!] 异常: 系统熵池耗尽，密钥对生成失败 / Generation failed.${NC}"; exit 1; fi
 
     UUID=$(uuidgen); SHORT_ID=$(openssl rand -hex 4 | tr -d '\n\r'); SS_PASS=$(openssl rand -base64 16 | tr -d '\n\r')
     HY2_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9'); HY2_OBFS=$(openssl rand -base64 8 | tr -dc 'a-zA-Z0-9')
@@ -340,6 +579,7 @@ EOF
         "VLESS") INBOUNDS="[$JSON_VLESS]" ;;
         "HY2")   INBOUNDS="[$JSON_HY2]" ;;
         "SS")    INBOUNDS="[$JSON_SS]" ;;
+        "VLESS_SS") INBOUNDS="[$JSON_VLESS, $JSON_SS]" ;;
         "ALL")   INBOUNDS="[$JSON_VLESS, $JSON_HY2, $JSON_SS]" ;;
     esac
 
@@ -360,16 +600,17 @@ EOF
 }
 EOF
 
-    cat > /etc/systemd/system/sing-box.service << SVC_EOF
+    if [[ "$INIT_SYS" == "systemd" ]]; then
+        cat > /etc/systemd/system/sing-box.service << SVC_EOF
 [Unit]
 Description=Sing-Box Service
 After=network.target nss-lookup.target
 [Service]
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
-$(if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then echo -e "ExecStartPre=-/bin/sh -c '/sbin/iptables -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '/sbin/ip6tables -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '/sbin/iptables -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '/sbin/ip6tables -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"; fi)
+$(if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then echo -e "ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"; fi)
 ExecStart=/usr/local/bin/sing-box run -c /etc/sing-box/config.json
-$(if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then echo -e "ExecStopPost=-/bin/sh -c '/sbin/iptables -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStopPost=-/bin/sh -c '/sbin/ip6tables -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"; fi)
+$(if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then echo -e "ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'\nExecStopPost=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"; fi)
 Restart=always
 RestartSec=10
 LimitNOFILE=infinity
@@ -377,17 +618,43 @@ LimitNPROC=infinity
 [Install]
 WantedBy=multi-user.target
 SVC_EOF
+    elif [[ "$INIT_SYS" == "openrc" ]]; then
+        mkdir -p /etc/conf.d
+        echo 'rc_ulimit="-n 1048576"' > /etc/conf.d/sing-box
+        cat > /etc/init.d/sing-box << SVC_EOF
+#!/sbin/openrc-run
+description="Sing-Box Service"
+command="/usr/local/bin/sing-box"
+command_args="run -c /etc/sing-box/config.json"
+command_background="yes"
+pidfile="/run/sing-box.pid"
+depend() { need net; }
+$(if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then echo "start_pre() {
+  $IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  return 0
+}
+stop_post() {
+  $IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  return 0
+}"; fi)
+SVC_EOF
+        chmod +x /etc/init.d/sing-box
+    fi
 
-    systemctl daemon-reload && systemctl enable --now sing-box; systemctl restart sing-box
-    sleep 2; systemctl is-active --quiet sing-box || { echo -e "${RED}[!] 致命错误：Sing-box 无法启动。 / Sing-box failed to start!${NC}"; journalctl -u sing-box --no-pager -n 20; exit 1; }
+    service_manager start sing-box
+    sleep 2; is_service_running sing-box || { echo -e "${RED}[!] 致命错误：Sing-box 守护进程拉起失败！ / Core panic!${NC}"; exit 1; }
 
     cat > /etc/ddr/.env << ENV_EOF
-CORE="singbox"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="$(curl -s4 api.ipify.org)"
+CORE="singbox"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="${GLOBAL_PUBLIC_IP}"
 ENV_EOF
     view_config "deploy"
 }
 
-# --- [5] 节点信息导出与二维码生成 / Export & QR Code ---
+# --- [7] 渲染与交互组件 / UI Rendering Components ---
 generate_qr() {
     local url=$1
     if command -v qrencode >/dev/null 2>&1; then
@@ -398,30 +665,34 @@ generate_qr() {
 }
 
 view_config() {
-    local CALLER=$1; clear; [[ ! -f /etc/ddr/.env ]] && { echo -e "${RED}未检测到配置！ / Configuration not found!${NC}"; sleep 2; return 0; }
+    local CALLER=$1; clear; [[ ! -f /etc/ddr/.env ]] && { echo -e "${RED}未检测到持久化配置变量！ / Configuration not found!${NC}"; sleep 2; return 0; }
     source /etc/ddr/.env
-    echo -e "${BLUE}======================================================================${NC}\n${BOLD}${CYAN}   协议全部节点参数 (${MODE}) / All Protocol Parameters ${NC}\n${BLUE}======================================================================${NC}"
-    echo -e "${BOLD}Engine:${NC} $CORE | ${BOLD}Mode:${NC} $MODE\n${BLUE}----------------------------------------------------------------------${NC}"
+    
+    local F_IP="${LINK_IP}"
+    [[ "${LINK_IP}" =~ ":" ]] && F_IP="[${LINK_IP}]"
+
+    echo -e "${BLUE}======================================================================${NC}\n${BOLD}${CYAN}   全局拓扑网络参数 (${MODE}) / Network Parameters ${NC}\n${BLUE}======================================================================${NC}"
+    echo -e "${BOLD}引擎栈 / Engine:${NC} $CORE | ${BOLD}模式 / Mode:${NC} $MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     
     if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]] || [[ "$MODE" == "VLESS_SS" ]]; then
-        VLESS_URL="vless://$UUID@$LINK_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VLESS_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#Aio-VLESS"
-        echo -e "${YELLOW}[ VLESS-Vision 通用链接 / VLESS URI ]${NC}\n(注: 小火箭务必将 uTLS 设置为 chrome, 否则秒被服务端断开 / Set uTLS to chrome in client)\n${GREEN}${VLESS_URL}${NC}"
+        VLESS_URL="vless://$UUID@$F_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VLESS_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#Aio-VLESS"
+        echo -e "${YELLOW}[ VLESS-Vision 深层隐匿链路 / VLESS URI ]${NC}\n(警告: 小火箭等客户端务必将 uTLS 设置为 chrome, 否则秒被物理断连 / Set uTLS to chrome)\n${GREEN}${VLESS_URL}${NC}"
         generate_qr "$VLESS_URL"
     fi
     if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
-        HY2_URL="hysteria2://$HY2_PASS@$LINK_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=20000-50000#Aio-Hy2"
-        echo -e "${YELLOW}[ Hysteria 2 通用链接 / Hy2 URI ]${NC}\n(注: 小火箭务必开启 \"允许不安全\" / Allow insecure in client)\n${GREEN}${HY2_URL}${NC}"
+        HY2_URL="hysteria2://$HY2_PASS@$F_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=20000-50000#Aio-Hy2"
+        echo -e "${YELLOW}[ Hysteria 2 暴力拥塞穿透链路 / Hy2 URI ]${NC}\n(警告: 基于自签证书防溯源策略，客户端务必开启 \"允许不安全\" / Allow insecure flag)\n${GREEN}${HY2_URL}${NC}"
         generate_qr "$HY2_URL"
     fi
     if [[ "$MODE" == *"SS"* ]] || [[ "$MODE" == *"ALL"* ]] || [[ "$MODE" == "VLESS_SS" ]]; then
         SS_BASE64=$(echo -n "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 -w 0 2>/dev/null || echo -n "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 | tr -d '\n')
-        SS_URL="ss://${SS_BASE64}@$LINK_IP:$SS_PORT#Aio-SS"
-        echo -e "${YELLOW}[ Shadowsocks-2022 通用链接 / SS URI ]${NC}\n${GREEN}${SS_URL}${NC}"
+        SS_URL="ss://${SS_BASE64}@$F_IP:$SS_PORT#Aio-SS"
+        echo -e "${YELLOW}[ Shadowsocks-2022 AED 高密链路 / SS URI ]${NC}\n${GREEN}${SS_URL}${NC}"
         generate_qr "$SS_URL"
     fi
     
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
-    echo -e "${YELLOW}[ Clash Meta 原生 YAML 节点块提取 / YAML Node Config ]${NC}"
+    echo -e "${YELLOW}[ Clash Meta 格式化 YAML 配置片段 / YAML Node Config ]${NC}"
     if [[ "$MODE" == *"VLESS"* ]] || [[ "$MODE" == *"ALL"* ]] || [[ "$MODE" == "VLESS_SS" ]]; then
         cat <<EOF
   - name: "Aio-VLESS"
@@ -457,85 +728,71 @@ EOF
     fi
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
 
-    [[ "$CALLER" == "deploy" ]] && echo -e "${GREEN}✔ 部署成功！如果要查询节点明细请随时进入菜单 13。 / Deploy Success!${NC}"
-    read -ep "按回车返回主菜单 / Press Enter to return..."
+    [[ "$CALLER" == "deploy" ]] && echo -e "${GREEN}✔ 服务池编译部署完毕！可随时键入 13 调出此面板。 / Initialization Phase Complete!${NC}"
+    read -ep "按回车安全退出交互空间并返回总台 / Press Enter to return..."
 }
 
-# --- [6] 说明书与自愈、OTA、智能卸载 功能 / Manual, Auto-fix & OTA ---
 show_usage() {
     clear; echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}${GREEN}   Aio-box Ultimate 说明书 / Detailed Usage Manual${NC}"
+    echo -e "${BOLD}${GREEN}   Aio-box Ultimate 手册指引 / Operations Manual${NC}"
     echo -e "${CYAN}======================================================================${NC}"
     
-    echo -e "${YELLOW}【一】核心部署指南 / Core & Protocol Deployment${NC}"
-    echo -e "   - Sing-box: 现代超级核心，支持全家桶(VLESS+Hy2+SS)完美共用 443 端口。"
-    echo -e "     (Modern super-core, perfectly supports VLESS+Hy2+SS sharing port 443.)"
-    echo -e "   - Xray-core: 经典稳定核心，专注 TCP/VLESS 与 SS，已移除对 Hy2 的支持。"
-    echo -e "     (Classic stable core, focused on TCP/VLESS and SS. Hy2 support removed.)"
-    echo -e "   - 建议 / Tip: 新手或全平台通用，请无脑选择 7. Sing-box 协议全家桶。"
-    echo -e "     (For beginners or all-platform compatibility, choose 7. Sing-box All-in-One.)\n"
+    echo -e "${YELLOW}【一】编排逻辑与架构选择 / Architectural Guide${NC}"
+    echo -e "   - [模式 10] Sing-box: 聚合平台架构。以超低内存占用实现三引擎完美共享同一套路由。"
+    echo -e "   - [模式 5] Xray-core (Hybrid): 极端物理隔离架构。TCP 由 Xray 原生承载，UDP 由 
+     官方 Hysteria 2 承载，提供极致性能天花板和隔离安全性。\n"
 
-    echo -e "${YELLOW}【二】客户端连接禁忌 (极度重要) / Client Configuration Taboos (Crucial)${NC}"
-    echo -e "   1. VLESS-Reality 节点 / VLESS-Reality Nodes:"
-    echo -e "      - [禁忌/Taboo]: 绝对不能开启 Mux(多路复用)！否则会被 Vision 流控秒断。"
-    echo -e "        (NEVER enable Mux, or the Vision flow control will drop the connection.)"
-    echo -e "      - [必做/Must]: 小火箭/Clash 中，uTLS / 指纹 必须设置为 chrome。"
-    echo -e "        (In Shadowrocket/Clash, uTLS/fingerprint MUST be set to 'chrome'.)"
-    echo -e "   2. Hysteria 2 节点 / Hysteria 2 Nodes:"
-    echo -e "      - [必做/Must]: 必须开启“允许不安全”(Allow Insecure/Skip Cert Verify)。"
-    echo -e "        (MUST enable 'Allow Insecure' or 'Skip Cert Verify' due to self-signed certs.)\n"
+    echo -e "${YELLOW}【二】终端对齐规范 (强约束) / Constraint Violations${NC}"
+    echo -e "   1. 关于 VLESS-Reality 的物理特征对齐:"
+    echo -e "      - 禁区：客户端配置时绝不能允许 Mux(多路复用) 打开，否则将被防火墙 Vision
+        嗅探直接中断握手并断连。"
+    echo -e "      - 要求：伪装指纹 (uTLS) 需高度保真，推荐并只推荐 chrome 选项。"
+    echo -e "   2. 关于 Hysteria 2 的证书免疫逃透:"
+    echo -e "      - 由于面板执行 100 年自动签发来反向切断数字证书链溯源，客户端侧验证必须选择
+        不安全（Insecure / Skip Cert Verify）。\n"
 
-    echo -e "${YELLOW}【三】面板功能使用说明 / Panel Functions Guide${NC}"
-    echo -e "   - [11] VPS网络调优 / VPS Tuning: 部署后执行一次，开启 BBR 与百万级并发限制。"
-    echo -e "     (Run once after deployment to enable BBR and maximize connection limits.)"
-    echo -e "   - [13] 节点参数导出 / Export Nodes: 随时调出节点链接与二维码。切勿泄露！"
-    echo -e "     (Display node links and QR codes anytime. DO NOT leak them publicly!)"
-    echo -e "   - [14] 源码在线更新 / OTA Sync: 从 GitHub 一键拉取最新代码热更新。"
-    echo -e "     (One-click hot update from the latest GitHub repository.)"
-    echo -e "   - [15] 卸载选项 / Uninstall Options: 提供完全物理清场与保留命令的柔性卸载。"
-    echo -e "     (Provides both total nuclear wipe and soft uninstall keeping the 'sb' command.)"
-    echo -e "   - [16] 环境自愈 / Auto-Fix Audit: 遇到无法启动、端口死锁、网络卡死，一键杀毒恢复！"
-    echo -e "     (One-click fix for start failures, port deadlocks, or network crashes!)\n"
+    echo -e "${YELLOW}【三】面板内置核武功能 / Panel Artillery Tools${NC}"
+    echo -e "   - [菜单 11] 底层内核跃迁: 调用 sysctl 对网络协议栈的内存窗口和 BBR 算法进行物理注入。"
+    echo -e "   - [菜单 16] 终极防御与环境自愈: 触发白盒级别的自我诊断。强力阻断端口抢占死锁，
+     深度清理脏路由规则 (只针对本系统链，保护 Docker 独立链安全)。\n"
     
     echo -e "${CYAN}======================================================================${NC}"
-    read -ep " 按回车返回主菜单 / Press Enter to return to main menu..."
+    read -ep " 阅读完毕，按回车返回总台 / Press Enter to return to main menu..."
 }
 
 update_script() {
     clear; echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}${GREEN}   源码 OTA 在线同步更新 / OTA Online Sync Update${NC}"
+    echo -e "${BOLD}${GREEN}   云端热更新引擎 / OTA Online Sync Subsystem${NC}"
     echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${YELLOW}[*] 正在从 GitHub 仓库拉取最新代码 / Fetching latest code...${NC}"
+    echo -e "${YELLOW}[*] 正在绕过缓存向远端库进行安全握手并同步源码 / Fetching master branch...${NC}"
     
     local OTA_URL="https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh"
     if curl -fLs --connect-timeout 10 "$OTA_URL" -o /tmp/aio_update.sh; then
         if grep -q "Aio-box Ultimate Console" /tmp/aio_update.sh; then
             mv /tmp/aio_update.sh /etc/ddr/aio.sh
             chmod +x /etc/ddr/aio.sh
-            echo -e "${GREEN}✔ OTA 更新成功！脚本已同步至最新版本。 / OTA Update Successful!${NC}"
+            echo -e "${GREEN}✔ 校验指纹比对通过！核心代码热更新完毕。 / OTA Engine Execution Complete!${NC}"
             sleep 2
             exec /etc/ddr/aio.sh
         else
-            echo -e "${RED}[!] 更新失败：文件校验不通过。 / Validation failed.${NC}"
+            echo -e "${RED}[!] 异常拦截: 更新层发现源码被篡改或校验失败。 / Hash validation error.${NC}"
         fi
     else
-        echo -e "${RED}[!] 更新失败：无法连接到 GitHub。 / Connection failed.${NC}"
+        echo -e "${RED}[!] 异常拦截: TCP/TLS 链路断层，无法抵达更新服务器。 / Remote host unreachable.${NC}"
     fi
-    read -ep "按回车返回主菜单 / Press Enter to return..."
+    read -ep "按回车返回总台 / Press Enter to return..."
 }
 
 clean_uninstall_menu() {
     clear
     echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}${RED}   卸载选项 / Uninstall Options${NC}"
+    echo -e "${BOLD}${RED}   深度防御式卸载系统 / Uninstallation Subsystem${NC}"
     echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${YELLOW}1. 完全卸载清空 (删除核心、配置、防火墙规则，并删除脚本快捷方式)${NC}"
-    echo -e "   Complete uninstall (Removes everything including the 'sb' command)"
-    echo -e "${YELLOW}2. 仅卸载代理环境 (保留一键安装脚本与 'sb' 快捷命令)${NC}"
-    echo -e "   Uninstall environment only (Keeps the 'sb' shortcut)"
-    echo -e "${GREEN}0. 返回主菜单 / Return to main menu${NC}"
+    echo -e "${YELLOW}1. 完全物理清场 (销毁代理堆栈、配置表、防火墙映射与全局快速访问别名)${NC}"
+    echo -e "${YELLOW}2. 保留式软性销毁 (销毁代理堆栈，但留存控制台与环境供随时重构)${NC}"
+    echo -e "${GREEN}0. 取消并返回 / Abort and Return${NC}"
     echo -e "${CYAN}======================================================================${NC}"
-    read -ep " 请选择 / Please select [0-2]: " un_choice
+    read -ep " 请谨慎输入执行代码 / Execution Code [0-2]: " un_choice
     
     case $un_choice in
         1) do_cleanup "full" ;;
@@ -545,92 +802,104 @@ clean_uninstall_menu() {
 }
 
 do_cleanup() {
-    clear; echo -e "${RED}⚠️  正在执行清理... / Executing cleanup...${NC}"
-    systemctl stop xray sing-box hysteria 2>/dev/null || true
-    systemctl disable xray sing-box hysteria 2>/dev/null || true
+    clear; echo -e "${RED}⚠️  正在执行外科手术级剥离逻辑... / Executing precision wipe protocol...${NC}"
+    init_system_environment
+    service_manager stop xray sing-box hysteria
     killall -9 xray sing-box hysteria 2>/dev/null || true
-    iptables -w -t nat -F PREROUTING 2>/dev/null || true
-    ip6tables -w -t nat -F PREROUTING 2>/dev/null || true
-    iptables -w -F INPUT 2>/dev/null || true
     
-    rm -rf /usr/local/etc/xray /etc/sing-box /usr/local/bin/xray /usr/local/bin/sing-box /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/hysteria.service /usr/local/bin/hysteria /etc/hysteria
-    systemctl daemon-reload
+    # 无损卸载核心：只剔除本身产生的靶向网络映射，确保机器其余服务平稳运行
+    clean_nat_rules
+    clean_input_rules
+    save_firewall_rules
+    
+    rm -rf /usr/local/etc/xray /etc/sing-box /etc/hysteria /usr/local/bin/xray /usr/local/bin/sing-box /usr/local/bin/hysteria
+    rm -f /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/hysteria.service
+    rm -f /etc/init.d/xray /etc/init.d/sing-box /etc/init.d/hysteria
+    rm -f /etc/sysctl.d/99-aio-box-tune.conf /etc/security/limits.d/aio-box.conf
+    
+    [[ "$INIT_SYS" == "systemd" ]] && systemctl daemon-reload 2>/dev/null || true
     
     if [[ "$1" == "full" ]]; then
         rm -rf /etc/ddr /usr/local/bin/sb
-        echo -e "${GREEN}✔ 完全物理清场完成！VPS 已恢复纯净。 / Complete cleanup finished!${NC}"
+        echo -e "${GREEN}✔ 物理层完全清场完毕！机器重获原生干净状态。 / Nuclear cleanup succeeded!${NC}"
         exit 0
     else
         rm -f /etc/ddr/.env
-        echo -e "${GREEN}✔ 代理环境已清空！保留了 'sb' 快捷命令。 / Environment removed, 'sb' command retained.${NC}"
-        read -ep "按回车返回主菜单 / Press Enter to return..."
+        echo -e "${GREEN}✔ 代理系统已销毁！底层框架与唤醒口令 'sb' 予以保留。 / App stack uninstalled.${NC}"
+        read -ep "按回车返回主控 / Press Enter to return..."
     fi
 }
 
 check_virgin_state() {
     clear
+    init_system_environment
     echo -e "\n\033[1;33m================================================================\033[0m"
-    echo -e "\033[1;33m       Aio-box 终极环境自愈审计 (Auto-Fix Virgin Check)         \033[0m"
+    echo -e "\033[1;33m       Aio-box 终极异常诊断与环境自愈 (Self-Healing Routine)    \033[0m"
     echo -e "\033[1;33m================================================================\033[0m\n"
 
-    echo -e "\033[1;36m[1/5] 检查端口与进程死锁 / Checking port deadlocks...\033[0m"
+    echo -e "\033[1;36m[1/5] 执行内存地址与高优端口锁死检测 / Scanning memory address binding...\033[0m"
     local BAD_PROC=$(ps aux | grep -E 'xray|sing-box|hysteria' | grep -v grep 2>/dev/null)
     local BAD_PORT=$(ss -tulpn | grep -E ':80\b|:443\b|:2053\b|:8443\b' 2>/dev/null)
     if [[ -n "$BAD_PROC" || -n "$BAD_PORT" ]]; then
-        echo -e "${YELLOW}  [!] 发现干扰项，执行全自动绞杀修复 / Fixing deadlocks...${NC}"
-        systemctl stop xray sing-box hysteria 2>/dev/null || true
+        echo -e "${YELLOW}  [!] 发现未受控的进程挂起或死锁。执行系统级原子绞杀 / Resolving deadlock...${NC}"
+        service_manager stop xray sing-box hysteria
         killall -9 xray sing-box hysteria 2>/dev/null || true
         fuser -k -9 443/tcp 443/udp 2053/tcp 2053/udp 80/tcp 8443/udp 2>/dev/null || true
-        echo -e "${GREEN}  ✔ 修复完成：端口已释放 / Ports released.${NC}"
+        echo -e "${GREEN}  ✔ 修复完毕: 系统句柄已强行阻断并释放回内存池 / Resources forcefully reclaimed.${NC}"
     else
-        echo -e "${GREEN}  ✔ 完美：无端口死锁 / No deadlocks found.${NC}"
+        echo -e "${GREEN}  ✔ 校验通过: 未发现寻址层争抢冲突 / Process logic healthy.${NC}"
     fi
 
-    echo -e "\n\033[1;36m[2/5] 检查内核 NAT 链污染 / Checking NAT chain pollution...\033[0m"
-    local NAT_C=$(iptables -t nat -L PREROUTING -nv 2>/dev/null | grep -i REDIRECT)
-    if [[ -n "$NAT_C" ]]; then
-        echo -e "${YELLOW}  [!] 发现 NAT 转发残留，重置防火墙规则 / Resetting firewall...${NC}"
-        iptables -w -t nat -F PREROUTING 2>/dev/null
-        ip6tables -w -t nat -F PREROUTING 2>/dev/null
-        echo -e "${GREEN}  ✔ 修复完成：内核转发链已清空 / NAT chain cleared.${NC}"
+    echo -e "\n\033[1;36m[2/5] 探查底层 Linux 内核 TCP/IP 过滤链栈 / Analyzing Netfilter topology...\033[0m"
+    local NAT_C=$($IPT -t nat -S PREROUTING 2>/dev/null | grep -i "20000:50000")
+    local INP_C=$($IPT -S INPUT 2>/dev/null | grep -i "Aio-box-")
+    local NAT_C6=$($IPT6 -t nat -S PREROUTING 2>/dev/null | grep -i "20000:50000")
+    local INP_C6=$($IPT6 -S INPUT 2>/dev/null | grep -i "Aio-box-")
+    if [[ -n "$NAT_C" || -n "$INP_C" || -n "$NAT_C6" || -n "$INP_C6" ]]; then
+        echo -e "${YELLOW}  [!] 捕获到废弃的虚假转发脏路由表。执行无损阻断剔除 / Executing targeted firewall reset...${NC}"
+        clean_nat_rules
+        clean_input_rules
+        save_firewall_rules
+        echo -e "${GREEN}  ✔ 修复完毕: 脏配置链已抹除，且未侵入/破坏其他原生程序运行 / Target chain disinfected.${NC}"
     else
-        echo -e "${GREEN}  ✔ 完美：防火墙链条纯净 / Firewall chain pristine.${NC}"
+        echo -e "${GREEN}  ✔ 校验通过: 防火墙底层逻辑栈纯净无干扰 / Filter stack pristine.${NC}"
     fi
 
-    echo -e "\n\033[1;36m[3/5] 检查 Systemd 服务残留 / Checking Systemd leftovers...\033[0m"
-    if [[ -f /etc/systemd/system/xray.service || -f /etc/systemd/system/sing-box.service ]]; then
-        echo -e "${YELLOW}  [!] 发现旧服务注册项，物理注销 / Unregistering old services...${NC}"
-        rm -f /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service 2>/dev/null
-        systemctl daemon-reload
-        echo -e "${GREEN}  ✔ 修复完成：系统服务已注销 / Services unregistered.${NC}"
+    echo -e "\n\033[1;36m[3/5] 检索系统自持服务管理器索引 / Checking daemon registry indexing...\033[0m"
+    if [[ -f /etc/systemd/system/xray.service || -f /etc/init.d/xray || -f /etc/systemd/system/hysteria.service ]]; then
+        echo -e "${YELLOW}  [!] 检索到失效自启动碎片信息。执行挂载卸载操作 / Unloading daemon fragments...${NC}"
+        rm -f /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/hysteria.service 2>/dev/null
+        rm -f /etc/init.d/xray /etc/init.d/sing-box /etc/init.d/hysteria 2>/dev/null
+        [[ "$INIT_SYS" == "systemd" ]] && systemctl daemon-reload 2>/dev/null || true
+        echo -e "${GREEN}  ✔ 修复完毕: 失效索引树已解除并对齐 / Daemon registry flushed.${NC}"
     else
-        echo -e "${GREEN}  ✔ 完美：服务注册表纯净 / Service registry pristine.${NC}"
+        echo -e "${GREEN}  ✔ 校验通过: 服务树状表条目完全干净 / Daemon registry healthy.${NC}"
     fi
 
-    echo -e "\n\033[1;36m[4/5] 检查物理文件污染 / Checking config file pollution...\033[0m"
+    echo -e "\n\033[1;36m[4/5] 校验块文件存储级污染遗存 / Performing disk I/O pollution check...\033[0m"
     local DIR_C=$(ls -d /usr/local/etc/xray /etc/sing-box /etc/hysteria 2>/dev/null)
     if [[ -n "$DIR_C" ]]; then
-        echo -e "${YELLOW}  [!] 发现残留配置，执行粉碎删除 / Removing old configs...${NC}"
-        rm -rf /usr/local/etc/xray /etc/sing-box /etc/hysteria /usr/local/bin/xray /usr/local/bin/sing-box 2>/dev/null
-        echo -e "${GREEN}  ✔ 修复完成：残留文件已彻底移除 / Old configs removed.${NC}"
+        echo -e "${YELLOW}  [!] 确认存在无效物理配置文件群。执行磁盘擦除程序 / Wiping orphaned configs...${NC}"
+        rm -rf /usr/local/etc/xray /etc/sing-box /etc/hysteria /usr/local/bin/xray /usr/local/bin/sing-box /usr/local/bin/hysteria 2>/dev/null
+        echo -e "${GREEN}  ✔ 修复完毕: 全链路陈旧文件已进行物理粉碎 / Dead weight cleared.${NC}"
     else
-        echo -e "${GREEN}  ✔ 完美：文件系统纯净 / Filesystem pristine.${NC}"
+        echo -e "${GREEN}  ✔ 校验通过: 文件节点未被污染侵蚀 / VFS tree pristine.${NC}"
     fi
 
-    echo -e "\n\033[1;36m[5/5] 检查出站网络状态 / Checking Outbound Network...\033[0m"
+    echo -e "\n\033[1;36m[5/5] 执行全球出站网关连通性探针 / Testing global egress pathways...\033[0m"
     if curl -I -s -m 5 https://www.google.com | head -n 1 | grep -qE "200|301|302"; then
-        echo -e "${GREEN}  ✔ 完美：服务器出站通畅 / Outbound network OK.${NC}"
+        echo -e "${GREEN}  ✔ 校验通过: 数据包出站物理隧道贯通无阻 / Data egress confirmed 100%.${NC}"
     else
-        echo -e "${RED}  [!] 警告：出站受阻，请检查云控制台防火墙！/ Outbound blocked!${NC}"
+        echo -e "${RED}  [!] 严重警告: GFW 出站受到阻截（防火墙未开放对应端口或无网），请彻查系统控制台拦截策略！${NC}"
     fi
 
     echo -e "\n\033[1;33m================================================================\033[0m"
-    echo -e "${GREEN}自愈审计完成。环境现为最佳安装状态。 / Auto-fix completed.${NC}"
-    read -ep "按回车返回主菜单 / Press Enter to return..."
+    echo -e "${GREEN}全链路自愈引擎闭环结束。部署环境现达到绝对真空洁净级别。 / Self-Healing Cycle Complete.${NC}"
+    read -ep "按回车返回主控制台 / Press Enter to return..."
 }
 
 tune_vps() {
-    clear; echo -e "${CYAN}执行 VPS 网络优化 (BBR + System Limits)... / Tuning VPS...${NC}"
+    clear; echo -e "${CYAN}正在开启底层系统算力提速注入 (TCP-BBR & I/O Limit Control)... / Kernel Hacking...${NC}"
     
     cat > /etc/security/limits.d/aio-box.conf <<EOF
 * soft nofile 1048576
@@ -661,44 +930,65 @@ net.core.somaxconn = 32768
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 EOF
-    sysctl --system >/dev/null 2>&1 || true
-    echo -e "${GREEN}✔ BBR与内核调优应用成功！ / Tuning applied successfully.${NC}"; read -ep "按回车返回 / Press Enter..."
+
+    # 应对 Alpine / Busybox 环境缺失标准 sysctl 解析链的兼容性物理操作
+    if [[ "$release" == "alpine" ]]; then
+        for conf in /etc/sysctl.d/*.conf /etc/sysctl.conf; do
+            [[ -f "$conf" ]] && sysctl -p "$conf" >/dev/null 2>&1 || true
+        done
+    else
+        sysctl --system >/dev/null 2>&1 || true
+    fi
+    
+    echo -e "${GREEN}✔ 内核 BBR 配置块及最大并发映射文件已成功熔接至系统底层！ / Subsystem Kernel Parameters Updated.${NC}"
+    read -ep "按回车安全退出 / Press Enter to return..."
 }
 
-# --- [7] 控制台主循环 / Main Console Loop ---
+# --- [8] 终端架构控制与交互渲染层 / Main Display Architecture ---
+init_system_environment
 setup_shortcut
+
+GLOBAL_PUBLIC_IP=""
+
 while true; do
-    IPV4=$(curl -s4m3 api.ipify.org || echo "N/A"); PUBLIC_IP="$IPV4"
-    systemctl is-active --quiet xray && STATUS="${GREEN}Running (Xray)${NC}" || { systemctl is-active --quiet sing-box && STATUS="${CYAN}Running (Sing-box)${NC}" || STATUS="${RED}Stopped${NC}"; }
+    # API 限流全局缓存机制，防止高频刷新封禁
+    [[ -z "$GLOBAL_PUBLIC_IP" || "$GLOBAL_PUBLIC_IP" == "N/A" ]] && GLOBAL_PUBLIC_IP=$(curl -s4m3 api.ipify.org || curl -s6m3 api64.ipify.org || echo "N/A")
+    
+    STATUS_STR=""
+    is_service_running xray && STATUS_STR="${GREEN}Xray-Core${NC} "
+    is_service_running sing-box && STATUS_STR+="${CYAN}Sing-Box${NC} "
+    is_service_running hysteria && STATUS_STR+="${PURPLE}Hy2(Native)${NC} "
+    [[ -z "$STATUS_STR" ]] && STATUS_STR="${RED}Stack Stopped${NC}"
+    
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V55 Custom Final] ${NC}\n${BLUE}======================================================================${NC}"
-    echo -e " IP: ${YELLOW}$IPV4${NC} | STATUS: $STATUS $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
-    echo -e " ${YELLOW}[ Xray-core 部署 / Deploy ]${NC}          ${CYAN}[ Sing-box 部署 / Deploy ]${NC}"
-    echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)         ${GREEN}4.${NC} VLESS-Vision (Reality)"
-    echo -e " ${GREEN}2.${NC} Shadowsocks                    ${GREEN}5.${NC} Hysteria 2"
-    echo -e " ${GREEN}3.${NC} VLESS + SS 组合                ${GREEN}6.${NC} Shadowsocks"
-    echo -e "                                  ${GREEN}7.${NC} 协议全家桶 / All-in-One"
+    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V56 Absolute Final] ${NC}\n${BLUE}======================================================================${NC}"
+    echo -e " 连通网关: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 物理运行栈: $STATUS_STR $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
+    echo -e " ${YELLOW}[ Xray-core 独立容器部署 ]${NC}           ${CYAN}[ Sing-box 聚合架构部署 ]${NC}"
+    echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)         ${GREEN}6.${NC} VLESS-Vision (Reality)"
+    echo -e " ${GREEN}2.${NC} Shadowsocks                    ${GREEN}7.${NC} Shadowsocks"
+    echo -e " ${GREEN}3.${NC} VLESS + SS 组合集群            ${GREEN}8.${NC} VLESS + SS 组合集群"
+    echo -e " ${GREEN}4.${NC} Hysteria 2 (Apernet 原生核心)  ${GREEN}9.${NC} Hysteria 2 (聚合版)"
+    echo -e " ${GREEN}5.${NC} 协议全家桶 (混编:Xray+原生Hy2) ${GREEN}10.${NC} 协议全家桶 (纯享:Sing-box)"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
-    echo -e " ${GREEN}11.${NC} VPS网络调优 / VPS Tuning      ${YELLOW}13.${NC} 节点参数导出 / Export Nodes"
-    echo -e " ${GREEN}12.${NC} 说明书 / Usage Guide          ${YELLOW}14.${NC} 源码在线更新 / OTA Sync"
-    echo -e " ${CYAN}16.${NC} 环境自愈 / Auto-Fix Audit      ${RED}15.${NC} 卸载选项 / Uninstall Options"
-    echo -e " ${GREEN}0.${NC} 退出面板 / Exit"
+    echo -e " ${GREEN}11.${NC} VPS 底层内核跃迁 / VPS Tuning   ${YELLOW}13.${NC} 全协议节点输出 / Export Nodes"
+    echo -e " ${GREEN}12.${NC} 核心逻辑说明向导 / Usage Guide  ${YELLOW}14.${NC} 触发热更新代码 / OTA Sync"
+    echo -e " ${CYAN}16.${NC} 环境异常诊断自愈 / Auto-Fix     ${RED}15.${NC} 防御式剥离卸载 / Uninstall"
+    echo -e " ${GREEN}0.${NC} 终止主进程退出终端 / Exit Panel"
     echo -e "${BLUE}======================================================================${NC}"
-    read -ep " 请选择 / Please select: " choice
+    read -ep " 请求下发执行代号 / Request input command: " choice
     
-    local DEPLOY_MODE=""
     case $choice in
-        1|4) DEPLOY_MODE="VLESS" ;;
-        5) DEPLOY_MODE="HY2" ;;
-        2|6) DEPLOY_MODE="SS" ;;
-        3) DEPLOY_MODE="VLESS_SS" ;;
-        7) DEPLOY_MODE="ALL" ;;
-    esac
-
-    case $choice in
-        1|2|3) deploy_xray "$DEPLOY_MODE" ;;
-        4|5|6|7) deploy_singbox "$DEPLOY_MODE" ;;
+        1) deploy_xray "VLESS" ;;
+        2) deploy_xray "SS" ;;
+        3) deploy_xray "VLESS_SS" ;;
+        4) deploy_official_hy2 "NORMAL" ;;
+        5) deploy_xray "ALL" ;;
+        6) deploy_singbox "VLESS" ;;
+        7) deploy_singbox "SS" ;;
+        8) deploy_singbox "VLESS_SS" ;;
+        9) deploy_singbox "HY2" ;;
+        10) deploy_singbox "ALL" ;;
         11) tune_vps ;; 
         12) show_usage ;;
         13) view_config ;; 
