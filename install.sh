@@ -996,7 +996,7 @@ while true; do
     echo -e " ${GREEN}14.${NC} 脚本说明书 / Script Manual"
     echo -e " ${GREEN}15.${NC} 脚本OTA升级 / Script OTA Update"
     echo -e " ${GREEN}16.${NC} 一键清空卸载 / One-Click Uninstall"
-    echo -e " ${GREEN}17.${NC} 安装环境初始化 / Environment Auto-Fix"
+    echo -e " ${GREEN}17.${NC} 删除所有节点配置与环境初始化 / Environment Auto-Fix"
     echo -e " ${GREEN}0.${NC} 退出脚本 / Exit Script"
     echo -e "${BLUE}======================================================================${NC}"
     read -ep " 请求下发执行代号 / Request input command: " choice
