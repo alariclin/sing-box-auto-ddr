@@ -72,37 +72,37 @@ sb
 ```
 ---
 ### 📋面板菜单速览：
-1-10: 核心架构编排 - 分别对应 Xray (1-5) 与 Sing-box (6-10) 的部署组合。
+* 1-10: 核心架构编排 - 分别对应 Xray (1-5) 与 Sing-box (6-10) 的部署组合。
 
-11: 系统 Benchmark & IP 审计 - 启动 bench.sh 与 Check.Place 跑分。
+* 11: 系统 Benchmark & IP 审计 - 启动 bench.sh 与 Check.Place 跑分。
 
-12: VPS 一键优化 - 物理注入 BBR 算法并提升内核并发句柄。
+* 12: VPS 一键优化 - 物理注入 BBR 算法并提升内核并发句柄。
 
-13: 节点参数显示 - 以明文及 Clash Meta YAML 格式输出当前拓扑配置。
+* 13: 节点参数显示 - 以明文及 Clash Meta YAML 格式输出当前拓扑配置。
 
-14: 脚本说明书 - 查阅针对 VLESS-Vision 指纹对齐及 Hy2 证书避坑指南。
+* 14: 脚本说明书 - 查阅针对 VLESS-Vision 指纹对齐及 Hy2 证书避坑指南。
 
-15: 脚本 OTA 升级 - 热加载 GitHub 最新发行版源码。
+* 15: 脚本 OTA 升级 - 热加载 GitHub 最新发行版源码。
 
-16: 一键清空卸载 - 执行防御式卸载，物理销毁残留碎片。
+* 16: 一键清空卸载 - 执行防御式卸载，物理销毁残留碎片。
 
-17: 环境自愈 (Auto-Fix) - 扫描死锁、清理脏路由、连通性探测。
+* 17: 环境自愈 (Auto-Fix) - 扫描死锁、清理脏路由、连通性探测。
 
 ---
 
 <a name="-faq-cn"></a>
 ### ❓常见问题 (FAQ)
-Q: VLESS 节点为什么连上后瞬间断开？
+* Q: VLESS 节点为什么连上后瞬间断开？
 
-A: 脚本强制启用了 xtls-rprx-vision。客户端严禁开启 Mux（多路复用），伪装指纹（Fingerprint）必须设置为 chrome。
+* A: 脚本强制启用了 xtls-rprx-vision。客户端严禁开启 Mux（多路复用），伪装指纹（Fingerprint）必须设置为 chrome。
 
-Q: 为什么 Alpine 系统上优化内核会失败？
+* Q: 为什么 Alpine 系统上优化内核会失败？
 
-A: 已完美修复此问题。脚本会智能回退并手动注入配置，实现 100% 优化成功率。
+* A: 已完美修复此问题。脚本会智能回退并手动注入配置，实现 100% 优化成功率。
 
-Q: 卸载会损坏 Docker 规则吗？
+* Q: 卸载会损坏 Docker 规则吗？
 
-A: 绝对不会。脚本采用正则精准锚定清理带有 Aio-box- 注释的规则，不使用野蛮的 iptables -F。
+* A: 绝对不会。脚本采用正则精准锚定清理带有 Aio-box- 注释的规则，不使用野蛮的 iptables -F。
 
 ---
 
@@ -177,34 +177,34 @@ sb
 ### 📋Panel Menu Overview：
 * **1-10: Core Architecture Orchestration - Mirror-level deployment options for Xray-core (1-5) and Sing-box (6-10).
 
-* **11: System Benchmark & IP Audit - Invokes bench.sh and Check.Place for deep quality scoring.
+* 11: System Benchmark & IP Audit - Invokes bench.sh and Check.Place for deep quality scoring.
 
-* **12: VPS One-Click Tuning - Injects BBR and elevates kernel handles to million-level concurrency.
+* 12: VPS One-Click Tuning - Injects BBR and elevates kernel handles to million-level concurrency.
 
-* **13: Node Parameter Display - Exports current topology in Plaintext, URI Links, and Clash Meta YAML formats.
+* 13: Node Parameter Display - Exports current topology in Plaintext, URI Links, and Clash Meta YAML formats.
 
-* **14: User Manual - Detailed guidance on VLESS-Vision fingerprint alignment and Hy2 certificate immunity.
+* 14: User Manual - Detailed guidance on VLESS-Vision fingerprint alignment and Hy2 certificate immunity.
 
-* **15: Script OTA Update - Bypasses local cache to hot-load the latest source code from GitHub Master branch.
+* 15: Script OTA Update - Bypasses local cache to hot-load the latest source code from GitHub Master branch.
 
-* **16: One-Click Uninstall - Executes defensive uninstallation, physically destroying all remnants and rolling back the system.
+* 16: One-Click Uninstall - Executes defensive uninstallation, physically destroying all remnants and rolling back the system.
 
-* **17: Environment Initialization (Auto-Fix) - Scans for port deadlocks, clears dirty routes, and tests connectivity.
+* 17: Environment Initialization (Auto-Fix) - Scans for port deadlocks, clears dirty routes, and tests connectivity.
 
 ---
 <a name="-frequently-asked-questions-faq"></a>
 ### ❓Frequently Asked Questions (FAQ)
-* **Q: Why does the VLESS node disconnect immediately after connecting?
+* Q: Why does the VLESS node disconnect immediately after connecting?
 
-* **A: The VLESS deployment strictly enforces xtls-rprx-vision flow control. In your client (e.g., Shadowrocket, v2rayN), you must not enable Mux (multiplexing), or the packets will be dropped by the Vision filter. Additionally, ensure the camouflage fingerprint (uTLS/Fingerprint) is strictly set to chrome。
+* A: The VLESS deployment strictly enforces xtls-rprx-vision flow control. In your client (e.g., Shadowrocket, v2rayN), you must not enable Mux (multiplexing), or the packets will be dropped by the Vision filter. Additionally, ensure the camouflage fingerprint (uTLS/Fingerprint) is strictly set to chrome。
 
-* **Q: Why does kernel optimization fail on Alpine systems?
+* Q: Why does kernel optimization fail on Alpine systems?
 
-* **A: Standard sysctl --system is unsupported on Busybox-based Alpine. However, Aio-box V56 has resolved this; the script intelligently falls back to traversing and injecting config files manually, achieving a 100% success rate。
+* A: Standard sysctl --system is unsupported on Busybox-based Alpine. However, Aio-box V56 has resolved this; the script intelligently falls back to traversing and injecting config files manually, achieving a 100% success rate。
 
-* **Q: Will uninstallation break my Docker forwarding rules?
+* Q: Will uninstallation break my Docker forwarding rules?
 
-* **A: Absolutely not. The script uses precise regex anchoring (only deleting rules with Aio-box- comments and specific port range redirects). It never uses "brute force" commands like iptables -F, perfectly preserving the host's native ecosystem。  
+* A: Absolutely not. The script uses precise regex anchoring (only deleting rules with Aio-box- comments and specific port range redirects). It never uses "brute force" commands like iptables -F, perfectly preserving the host's native ecosystem。  
 
 ---
 
