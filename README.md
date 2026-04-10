@@ -175,36 +175,36 @@ sb
 ```
 ---
 ### 📋Panel Menu Overview：
-1-10: Core Architecture Orchestration - Mirror-level deployment options for Xray-core (1-5) and Sing-box (6-10).
+* **1-10: Core Architecture Orchestration - Mirror-level deployment options for Xray-core (1-5) and Sing-box (6-10).
 
-11: System Benchmark & IP Audit - Invokes bench.sh and Check.Place for deep quality scoring.
+* **11: System Benchmark & IP Audit - Invokes bench.sh and Check.Place for deep quality scoring.
 
-12: VPS One-Click Tuning - Injects BBR and elevates kernel handles to million-level concurrency.
+* **12: VPS One-Click Tuning - Injects BBR and elevates kernel handles to million-level concurrency.
 
-13: Node Parameter Display - Exports current topology in Plaintext, URI Links, and Clash Meta YAML formats.
+* **13: Node Parameter Display - Exports current topology in Plaintext, URI Links, and Clash Meta YAML formats.
 
-14: User Manual - Detailed guidance on VLESS-Vision fingerprint alignment and Hy2 certificate immunity.
+* **14: User Manual - Detailed guidance on VLESS-Vision fingerprint alignment and Hy2 certificate immunity.
 
-15: Script OTA Update - Bypasses local cache to hot-load the latest source code from GitHub Master branch.
+* **15: Script OTA Update - Bypasses local cache to hot-load the latest source code from GitHub Master branch.
 
-16: One-Click Uninstall - Executes defensive uninstallation, physically destroying all remnants and rolling back the system.
+* **16: One-Click Uninstall - Executes defensive uninstallation, physically destroying all remnants and rolling back the system.
 
-17: Environment Initialization (Auto-Fix) - Scans for port deadlocks, clears dirty routes, and tests connectivity.
+* **17: Environment Initialization (Auto-Fix) - Scans for port deadlocks, clears dirty routes, and tests connectivity.
 
 ---
 <a name="-frequently-asked-questions-faq"></a>
 ### ❓Frequently Asked Questions (FAQ)
-Q: Why does the VLESS node disconnect immediately after connecting?
+* **Q: Why does the VLESS node disconnect immediately after connecting?
 
-A: The VLESS deployment strictly enforces xtls-rprx-vision flow control. In your client (e.g., Shadowrocket, v2rayN), you must not enable Mux (multiplexing), or the packets will be dropped by the Vision filter. Additionally, ensure the camouflage fingerprint (uTLS/Fingerprint) is strictly set to chrome。
+* **A: The VLESS deployment strictly enforces xtls-rprx-vision flow control. In your client (e.g., Shadowrocket, v2rayN), you must not enable Mux (multiplexing), or the packets will be dropped by the Vision filter. Additionally, ensure the camouflage fingerprint (uTLS/Fingerprint) is strictly set to chrome。
 
-Q: Why does kernel optimization fail on Alpine systems?
+* **Q: Why does kernel optimization fail on Alpine systems?
 
-A: Standard sysctl --system is unsupported on Busybox-based Alpine. However, Aio-box V56 has resolved this; the script intelligently falls back to traversing and injecting config files manually, achieving a 100% success rate。
+* **A: Standard sysctl --system is unsupported on Busybox-based Alpine. However, Aio-box V56 has resolved this; the script intelligently falls back to traversing and injecting config files manually, achieving a 100% success rate。
 
-Q: Will uninstallation break my Docker forwarding rules?
+* **Q: Will uninstallation break my Docker forwarding rules?
 
-A: Absolutely not. The script uses precise regex anchoring (only deleting rules with Aio-box- comments and specific port range redirects). It never uses "brute force" commands like iptables -F, perfectly preserving the host's native ecosystem。  
+* **A: Absolutely not. The script uses precise regex anchoring (only deleting rules with Aio-box- comments and specific port range redirects). It never uses "brute force" commands like iptables -F, perfectly preserving the host's native ecosystem。  
 
 ---
 
