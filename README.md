@@ -69,10 +69,7 @@ sudo bash -c "$(curl -Ls https://ghp.ci/https://raw.githubusercontent.com/alaric
 sb
 ```
 
-
-👉<details>
-<summary><b>点击查看面板菜单速览</b></summary>
-
+面板菜单速览：
 1-10: 核心架构编排 - 分别对应 Xray (1-5) 与 Sing-box (6-10) 的部署组合。
 
 11: 系统 Benchmark & IP 审计 - 启动 bench.sh 与 Check.Place 跑分。
@@ -89,11 +86,8 @@ sb
 
 17: 环境自愈 (Auto-Fix) - 扫描死锁、清理脏路由、连通性探测。
 
-</details>
-
 
 <a name="-faq-cn"></a>
-
 ❓ 常见问题 (FAQ)
 Q: VLESS 节点为什么连上后瞬间断开？
 
