@@ -729,9 +729,9 @@ show_usage() {
     
     echo -e "${YELLOW}【一】编排逻辑与架构选择 / Architectural Guide${NC}"
     echo -e "   - [模式 10] Sing-box: 聚合平台架构。以超低内存占用实现三引擎完美共享。"
-    echo -e "     (Sing-box: Unified platform architecture. Shares one routing table with ultra-low memory usage.)"
-    echo -e "   - [模式 5] Xray-core (Hybrid): 极端物理隔离架构。TCP 由 Xray 原生承载，UDP 由官方 Hysteria 2 承载。"
-    echo -e "     (Xray-core Hybrid: Extreme physical isolation. TCP native on Xray, UDP on native Hysteria 2.)\n"
+    echo -e "     (Sing-box: Aggregation Platform Architecture. Achieving seamless sharing of three engines with ultra-low memory usage..)"
+    echo -e "   - [模式 5] Xray-core (Hybrid): 物理隔离架构。TCP由Xray原生承载，UDP由官方Hysteria 2承载。"
+    echo -e "     (Xray-core (Hybrid): Physical isolation architecture. TCP is carried by Xray itself, while UDP is carried by the official Hysteria 2..)\n"
 
     echo -e "${YELLOW}【二】终端对齐规范 / Constraint Violations${NC}"
     echo -e "   1. 关于 VLESS-Reality 的物理特征对齐 / About VLESS-Reality physical alignment:"
@@ -745,7 +745,7 @@ show_usage() {
 
     echo -e "${YELLOW}【三】面板内置核武功能 / Panel Artillery Tools${NC}"
     echo -e "   - [菜单 12] VPS一键优化 / VPS Tuning: 调用 sysctl 注入底层加速参数与 BBR 算法。"
-    echo -e "   - [菜单 17] 安装环境初始化 / Environment Auto-Fix: 触发白盒级别的自我诊断，阻断死锁与脏路由。"
+    echo -e "   - [菜单 17] 安装环境初始化 / Environment Auto-Fix: 自我诊断，阻断死锁与脏路由。"
     echo -e "     (Auto-Fix: White-box self-diagnosis to resolve port deadlocks and clear dirty routing rules.)\n"
     
     echo -e "${CYAN}======================================================================${NC}"
@@ -778,10 +778,10 @@ update_script() {
 clean_uninstall_menu() {
     clear
     echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${BOLD}${RED}   深度卸载系统 / Uninstallation Subsystem${NC}"
+    echo -e "${BOLD}${RED}   深度卸载系统 / Deep Unloading System${NC}"
     echo -e "${CYAN}======================================================================${NC}"
-    echo -e "${YELLOW}1. 完全物理清场 (销毁代理堆栈、配置表、防火墙映射与全局快速访问别名)${NC}"
-    echo -e "${YELLOW}2. 保留式软性销毁 (销毁代理堆栈，但留存控制台与环境供随时重构)${NC}"
+    echo -e "${YELLOW}1. 完全物理清场/Complete physical decontamination (销毁节点、配置表、防火墙映射与全局快速访问别名)${NC}"
+    echo -e "${YELLOW}2. 保留脚本与清场/Maintain the script and clear the area (销毁节点配置等，但留存控制台与环境供随时重构)${NC}"
     echo -e "${GREEN}0. 取消并返回 / Abort and Return${NC}"
     echo -e "${CYAN}======================================================================${NC}"
     read -ep " 请谨慎输入执行代码 / Execution Code [0-2]: " un_choice
