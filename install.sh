@@ -981,9 +981,9 @@ while true; do
     
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}==========================Aio-box==========================${NC}\n${BLUE}======================================================================${NC}"
+    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${YELLOW}==========================Aio-box==========================${NC}\n${BLUE}======================================================================${NC}"
     echo -e " 连通网关: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 物理运行栈: $STATUS_STR $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
-    echo -e " ${YELLOW}[ Xray-core 部署 ]${NC}               ${CYAN}[ Sing-box 部署 ]${NC}"
+    echo -e " ${YELLOW}[ Xray-core 部署 ]${NC}               ${YELLOW}[ Sing-box 部署 ]${NC}"
     echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)        ${GREEN}6.${NC} VLESS-Vision (Reality)"
     echo -e " ${GREEN}2.${NC} Shadowsocks-2022              ${GREEN}7.${NC} Shadowsocks-2022"
     echo -e " ${GREEN}3.${NC} VLESS + SS-2022 组合           ${GREEN}8.${NC} VLESS + SS-2022 组合"
@@ -992,11 +992,11 @@ while true; do
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${GREEN}11.${NC} 本机配置与IP测速纯净度 / Benchmark & IP Check"
     echo -e " ${GREEN}12.${NC} VPS一键优化 / VPS One-Click Tuning"
-    echo -e " ${YELLOW}13.${NC} 节点参数显示 / Display Node Config"
-    echo -e " ${YELLOW}14.${NC} 脚本说明书 / Script Manual"
-    echo -e " ${CYAN}15.${NC} 脚本OTA升级 / Script OTA Update"
-    echo -e " ${RED}16.${NC} 一键清空卸载 / One-Click Uninstall"
-    echo -e " ${PURPLE}17.${NC} 安装环境初始化 / Environment Auto-Fix"
+    echo -e " ${GREEN}13.${NC} 节点参数显示 / Display Node Config"
+    echo -e " ${GREEN}14.${NC} 脚本说明书 / Script Manual"
+    echo -e " ${GREEN}15.${NC} 脚本OTA升级 / Script OTA Update"
+    echo -e " ${GREEN}16.${NC} 一键清空卸载 / One-Click Uninstall"
+    echo -e " ${GREEN}17.${NC} 安装环境初始化 / Environment Auto-Fix"
     echo -e " ${GREEN}0.${NC} 退出脚本 / Exit Script"
     echo -e "${BLUE}======================================================================${NC}"
     read -ep " 请求下发执行代号 / Request input command: " choice
