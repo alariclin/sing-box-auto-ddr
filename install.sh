@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
+# ====================================================================
+# Aio-box Ultimate Console [Dual-Core Hybrid | Auto-Fix | Enterprise]
+# ====================================================================
+
 export DEBIAN_FRONTEND=noninteractive
 export LANG=en_US.UTF-8
-RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[0;33m' BLUE='\033[0;36m' PURPLE='\033[0;35m' CYAN='\033[0;36m' NC='\033[0m' BOLD='\033[1m'  
+RED='\033[0;31m' GREEN='\033[0;32m' YELLOW='\033[0;33m' BLUE='\033[0;36m' PURPLE='\033[0;35m' CYAN='\033[0;36m' NC='\033[0m' BOLD='\033[1m'  
 
 # --- [0] 提权拦截器 / Privilege Escalation Interceptor ---
 if [[ $EUID -ne 0 ]]; then
@@ -170,7 +174,6 @@ clean_nat_rules() {
     while $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q "20000:50000"; do
         local LOCAL_RULE=$($IPT -w -t nat -S PREROUTING 2>/dev/null | grep "20000:50000" | head -n 1 | sed 's/^-A /-D /')
         [[ -z "$LOCAL_RULE" ]] && break
-        # 使用 eval 确保 sed 导出的带引号注释规则能被 bash 正确解析并传递给 iptables -D
         eval $IPT -w -t nat $LOCAL_RULE 2>/dev/null || break
     done
     while $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q "20000:50000"; do
@@ -230,8 +233,25 @@ fetch_github_release() {
         download_url=$(curl -sL "https://ghp.ci/$api_url" | jq -r ".assets[] | select(.name | contains(\"$keyword\")) | .browser_download_url" | head -n 1)
     fi
 
+    # API fallback to raw core files hosted on personal repo
     if [[ -z "$download_url" || "$download_url" == "null" ]]; then
-        echo -e "${RED}[!] 异常: 无法解析 $repo 下载链。请检查网络。 / Failed to resolve link.${NC}"; exit 1
+        echo -e "${YELLOW} -> API 探测失败，自动降级至本地备用仓库拉取... / API failed, fallback to local core repo...${NC}"
+        local fallback_url=""
+        case "$keyword" in
+            *"Xray"*) fallback_url="https://raw.githubusercontent.com/alariclin/aio-box/main/core/Xray-linux-${XRAY_ARCH}.zip" ;;
+            *"sing-box"*) fallback_url="https://raw.githubusercontent.com/alariclin/aio-box/main/core/sing-box-linux-${SB_ARCH}.tar.gz" ;;
+            *"hysteria"*) fallback_url="https://raw.githubusercontent.com/alariclin/aio-box/main/core/hysteria-linux-${HY2_ARCH}" ;;
+        esac
+
+        if [[ -n "$fallback_url" ]]; then
+            local mirrors=("" "https://ghp.ci/" "https://ghproxy.net/")
+            for mirror in "${mirrors[@]}"; do
+                if curl -fLs --connect-timeout 10 "${mirror}${fallback_url}" -o "/tmp/${output_file}" && [[ -s "/tmp/${output_file}" ]]; then
+                    echo -e "${GREEN}    ✔ 核心资产从备用仓库提取成功！ / Asset fetched from fallback repo!${NC}"; return 0
+                fi
+            done
+        fi
+        echo -e "${RED}[!] 致命异常: 所有通道均无法下载核心资产。请检查网络。 / Asset download completely failed.${NC}"; exit 1
     fi
 
     local mirrors=("" "https://ghp.ci/" "https://ghproxy.net/")
@@ -240,7 +260,25 @@ fetch_github_release() {
             echo -e "${GREEN}    ✔ 核心资产提取成功！ / Asset successfully fetched!${NC}"; return 0
         fi
     done
-    echo -e "${RED}[!] 异常: 下载资产失败 / Asset download failed.${NC}"; exit 1
+    
+    # Final fallback if official download URLs fail
+    echo -e "${YELLOW} -> 官方下载链接失效，自动降级至本地备用仓库拉取... / Official URLs failed, fallback to local core repo...${NC}"
+    local fallback_url=""
+    case "$keyword" in
+        *"Xray"*) fallback_url="https://raw.githubusercontent.com/alariclin/aio-box/main/core/Xray-linux-${XRAY_ARCH}.zip" ;;
+        *"sing-box"*) fallback_url="https://raw.githubusercontent.com/alariclin/aio-box/main/core/sing-box-linux-${SB_ARCH}.tar.gz" ;;
+        *"hysteria"*) fallback_url="https://raw.githubusercontent.com/alariclin/aio-box/main/core/hysteria-linux-${HY2_ARCH}" ;;
+    esac
+
+    if [[ -n "$fallback_url" ]]; then
+        local mirrors=("" "https://ghp.ci/" "https://ghproxy.net/")
+        for mirror in "${mirrors[@]}"; do
+            if curl -fLs --connect-timeout 10 "${mirror}${fallback_url}" -o "/tmp/${output_file}" && [[ -s "/tmp/${output_file}" ]]; then
+                echo -e "${GREEN}    ✔ 核心资产从备用仓库提取成功！ / Asset fetched from fallback repo!${NC}"; return 0
+            fi
+        done
+    fi
+    echo -e "${RED}[!] 致命异常: 下载资产失败 / Asset download failed.${NC}"; exit 1
 }
 
 fetch_geo_data() {
@@ -249,6 +287,15 @@ fetch_geo_data() {
     for mirror in "${mirrors[@]}"; do
         if curl -fLs --connect-timeout 10 "${mirror}${official_url}" -o "/tmp/${file_name}" && [[ -s "/tmp/${file_name}" ]]; then return 0; fi
     done
+    
+    echo -e "${YELLOW} -> 官方 Geo 数据下载失败，自动降级至备用仓库拉取... / Official Geo failed, fallback to local repo...${NC}"
+    local fallback_geo_url="https://raw.githubusercontent.com/alariclin/aio-box/main/core/${file_name}"
+    for mirror in "${mirrors[@]}"; do
+        if curl -fLs --connect-timeout 10 "${mirror}${fallback_geo_url}" -o "/tmp/${file_name}" && [[ -s "/tmp/${file_name}" ]]; then
+            echo -e "${GREEN}    ✔ Geo 数据从备用仓库提取成功！ / Geo data fetched from fallback repo!${NC}"; return 0
+        fi
+    done
+
     echo -e "${RED}[!] 致命异常: 路由数据库文件 (${file_name}) 下载失败，请检查网络连通性！ / Geo data download failed.${NC}"
     exit 1
 }
