@@ -1002,7 +1002,7 @@ check_virgin_state() {
     clear
     init_system_environment
     echo -e "\n\033[1;33m================================================================\033[0m"
-    echo -e "\033[1;33m       Aio-box 异常诊断与环境自愈 (Self-Healing Routine)    \033[0m"
+    echo -e "\033[1;33m 删除全部节点与环境初始化 / Delete all nodes and perform environment initialization    \033[0m"
     echo -e "\033[1;33m================================================================\033[0m\n"
 
     echo -e "\033[1;36m[1/5] 执行内存地址与高优端口锁死检测 / Scanning memory address binding...\033[0m"
