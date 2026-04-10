@@ -70,8 +70,8 @@ sb
 ```
 
 
-<details>
-👉<summary><b>点击查看面板菜单速览</b></summary>
+👉<details>
+<summary><b>点击查看面板菜单速览</b></summary>
 
 1-10: 核心架构编排 - 分别对应 Xray (1-5) 与 Sing-box (6-10) 的部署组合。
 
