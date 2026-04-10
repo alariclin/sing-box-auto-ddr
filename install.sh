@@ -728,12 +728,12 @@ show_usage() {
     echo -e "${CYAN}======================================================================${NC}"
     
     echo -e "${YELLOW}【一】编排逻辑与架构选择 / Architectural Guide${NC}"
-    echo -e "   - [模式 10] Sing-box: 聚合平台架构。以超低内存占用实现三引擎完美共享同一套路由。"
+    echo -e "   - [模式 10] Sing-box: 聚合平台架构。以超低内存占用实现三引擎完美共享。"
     echo -e "     (Sing-box: Unified platform architecture. Shares one routing table with ultra-low memory usage.)"
     echo -e "   - [模式 5] Xray-core (Hybrid): 极端物理隔离架构。TCP 由 Xray 原生承载，UDP 由官方 Hysteria 2 承载。"
     echo -e "     (Xray-core Hybrid: Extreme physical isolation. TCP native on Xray, UDP on native Hysteria 2.)\n"
 
-    echo -e "${YELLOW}【二】终端对齐规范 (强约束) / Constraint Violations${NC}"
+    echo -e "${YELLOW}【二】终端对齐规范 / Constraint Violations${NC}"
     echo -e "   1. 关于 VLESS-Reality 的物理特征对齐 / About VLESS-Reality physical alignment:"
     echo -e "      - 禁区：客户端绝不能开启 Mux(多路复用)！否则将被 Vision 流控直接断连。"
     echo -e "        (Taboo: NEVER enable Mux in client configs, or Vision flow control will drop it.)"
@@ -981,7 +981,7 @@ while true; do
     
     source /etc/ddr/.env 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=""
     
-    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}               Aio-box    ${NC}\n${BLUE}======================================================================${NC}"
+    clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}Aio-box${NC}\n${BLUE}======================================================================${NC}"
     echo -e " 连通网关: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 物理运行栈: $STATUS_STR $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${YELLOW}[ Xray-core 部署 ]${NC}            ${CYAN}[ Sing-box 部署 ]${NC}"
     echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)         ${GREEN}6.${NC} VLESS-Vision (Reality)"
