@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ====================================================================
-# Aio-box Ultimate Console [Dual-Core Hybrid | Auto-Fix | Enterprise]
+# Aio-box Ultimate Console
 # ====================================================================
 
 export DEBIAN_FRONTEND=noninteractive
