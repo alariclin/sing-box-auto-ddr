@@ -83,16 +83,19 @@ sb
 ---
 
 <a name="-faq-cn"></a>
+
 ### ❓ 常见问题 (FAQ)
 
 * **Q: VLESS 节点为什么连上后瞬间断开？**
- * **A:** 脚本强制启用了 `xtls-rprx-vision`。客户端严禁开启 `Mux`（多路复用），伪装指纹（Fingerprint）必须设置为 `chrome`。
+  * **A:** 脚本强制启用了 `xtls-rprx-vision`。客户端严禁开启 `Mux`（多路复用），伪装指纹（Fingerprint）必须设置为 `chrome`。
 
 * **Q: 为什么 Alpine 系统上优化内核会失败？**
- * **A:** 已完美修复此问题。脚本会智能回退并手动注入配置，实现 100% 优化成功率。
+  * **A:** 已完美修复此问题。脚本会智能回退并手动注入配置，实现 100% 优化成功率。
 
 * **Q: 卸载会损坏 Docker 规则吗？**
- * **A:** 绝对不会。脚本采用正则精准锚定清理带有 `Aio-box-` 注释的规则，不使用野蛮的 `iptables -F`。
+  * **A:** 绝对不会。脚本采用正则精准锚定清理带有 `Aio-box-` 注释的规则，不使用野蛮的 `iptables -F`。
+
+---
 ---
 
 <a name="-english-description"></a>
@@ -176,7 +179,7 @@ sb
 ---
 
 ## 💻 系统要求 / System Requirements
-* **OS**: Debian 10+, Ubuntu 20.04+, CentOS 8+, AlmaLinux, Rocky Linux, Alpine Linux (Full Support).
+* **OS: Debian 10+, Ubuntu 20.04+, CentOS 8+, AlmaLinux, Rocky Linux, Alpine Linux (Full Support).
 *Init System: Systemd or OpenRC is strictly required for daemon persistence.
 *Network: Dual-stack IPv4 / IPv6 resolution fully supported.
 
