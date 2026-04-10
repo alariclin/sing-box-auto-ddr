@@ -70,7 +70,7 @@ init_system_environment() {
         elif [[ "${release}" == "centos" ]]; then
             deps+=(cronie util-linux bind-utils firewalld)
         elif [[ "${release}" == "alpine" ]]; then
-            deps+=(util-linux bind-tools coreutils)
+            deps+=(util-linux bind-tools coreutils iproute2)
         fi
         
         ${installType} "${deps[@]}" >/dev/null 2>&1
@@ -94,6 +94,18 @@ get_architecture() {
         aarch64|armv8) XRAY_ARCH="arm64-v8a"; SB_ARCH="arm64"; HY2_ARCH="arm64" ;;
         *) echo -e "${RED}[!] 异常中断: 无法识别的底层 CPU 架构 / Unsupported architecture: $ARCH${NC}"; exit 1 ;;
     esac
+}
+
+generate_robust_uuid() {
+    if command -v uuidgen >/dev/null 2>&1; then
+        uuidgen
+    elif command -v cat >/dev/null 2>&1 && [[ -f /proc/sys/kernel/random/uuid ]]; then
+        cat /proc/sys/kernel/random/uuid
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c "import uuid; print(uuid.uuid4())"
+    else
+        echo -e "${RED}[!] 异常: 彻底失去 UUID 生成能力。${NC}" >&2; exit 1
+    fi
 }
 
 # --- [2] 跨平台统一服务控制器 / Universal Daemon Controller ---
@@ -142,7 +154,7 @@ allowPort() {
     
     if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
         sudo ufw allow "${port}/${type}" >/dev/null 2>&1
-    elif command -v firewall-cmd >/dev/null 2>&1 && systemctl status firewalld 2>/dev/null | grep -q "active (running)"; then
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state 2>/dev/null | grep -q running; then
         firewall-cmd --zone=public --add-port="${port}/${type}" --permanent >/dev/null 2>&1
         firewall-cmd --reload >/dev/null 2>&1
     elif command -v iptables >/dev/null 2>&1; then
@@ -162,12 +174,13 @@ clean_nat_rules() {
     while $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q "20000:50000"; do
         local LOCAL_RULE=$($IPT -w -t nat -S PREROUTING 2>/dev/null | grep "20000:50000" | head -n 1 | sed 's/^-A /-D /')
         [[ -z "$LOCAL_RULE" ]] && break
-        $IPT -w -t nat $LOCAL_RULE 2>/dev/null || break
+        # 使用 eval 确保 sed 导出的带引号注释规则能被 bash 正确解析并传递给 iptables -D
+        eval $IPT -w -t nat $LOCAL_RULE 2>/dev/null || break
     done
     while $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q "20000:50000"; do
         local LOCAL_RULE6=$($IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep "20000:50000" | head -n 1 | sed 's/^-A /-D /')
         [[ -z "$LOCAL_RULE6" ]] && break
-        $IPT6 -w -t nat $LOCAL_RULE6 2>/dev/null || break
+        eval $IPT6 -w -t nat $LOCAL_RULE6 2>/dev/null || break
     done
 }
 
@@ -175,12 +188,12 @@ clean_input_rules() {
     while $IPT -w -S INPUT 2>/dev/null | grep -q "Aio-box-"; do
         local LOCAL_RULE=$($IPT -w -S INPUT 2>/dev/null | grep "Aio-box-" | head -n 1 | sed 's/^-A /-D /')
         [[ -z "$LOCAL_RULE" ]] && break
-        $IPT -w $LOCAL_RULE 2>/dev/null || break
+        eval $IPT -w $LOCAL_RULE 2>/dev/null || break
     done
     while $IPT6 -w -S INPUT 2>/dev/null | grep -q "Aio-box-"; do
         local LOCAL_RULE6=$($IPT6 -w -S INPUT 2>/dev/null | grep "Aio-box-" | head -n 1 | sed 's/^-A /-D /')
         [[ -z "$LOCAL_RULE6" ]] && break
-        $IPT6 -w $LOCAL_RULE6 2>/dev/null || break
+        eval $IPT6 -w $LOCAL_RULE6 2>/dev/null || break
     done
 }
 
@@ -228,7 +241,7 @@ fetch_github_release() {
     local mirrors=("" "https://ghp.ci/" "https://ghproxy.net/")
     for mirror in "${mirrors[@]}"; do
         if curl -fLs --connect-timeout 10 "${mirror}${download_url}" -o "/tmp/${output_file}" && [[ -s "/tmp/${output_file}" ]]; then
-            echo -e "${GREEN}   ✔ 核心资产提取成功！ / Asset successfully fetched!${NC}"; return 0
+            echo -e "${GREEN}    ✔ 核心资产提取成功！ / Asset successfully fetched!${NC}"; return 0
         fi
     done
     echo -e "${RED}[!] 异常: 下载资产失败 / Asset download failed.${NC}"; exit 1
@@ -240,6 +253,7 @@ fetch_geo_data() {
     for mirror in "${mirrors[@]}"; do
         if curl -fLs --connect-timeout 10 "${mirror}${official_url}" -o "/tmp/${file_name}" && [[ -s "/tmp/${file_name}" ]]; then return 0; fi
     done
+    echo -e "${RED}[!] 致命异常: 路由数据库文件 (${file_name}) 下载失败，请检查网络连通性！ / Geo data download failed.${NC}"
     exit 1
 }
 
@@ -298,6 +312,7 @@ deploy_official_hy2() {
     
     mkdir -p /etc/hysteria; openssl ecparam -genkey -name prime256v1 -out /etc/hysteria/server.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /etc/hysteria/server.key -out /etc/hysteria/server.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
+    chmod 600 /etc/hysteria/server.key
 
     cat > /etc/hysteria/config.yaml << EOF
 listen: :${HY2_PORT}
@@ -315,6 +330,7 @@ bandwidth:
   up: 3000 mbps
   down: 3000 mbps
 EOF
+    chmod 600 /etc/hysteria/config.yaml
 
     if [[ "$INIT_SYS" == "systemd" ]]; then
         cat > /etc/systemd/system/hysteria.service << SVC_EOF
@@ -372,6 +388,7 @@ SVC_EOF
         cat > /etc/ddr/.env << ENV_EOF
 CORE="hysteria"; MODE="HY2"; UUID=""; VLESS_SNI=""; VLESS_PORT=""; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT=""; PUBLIC_KEY=""; SHORT_ID=""; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS=""; LINK_IP="${GLOBAL_PUBLIC_IP}"
 ENV_EOF
+        chmod 600 /etc/ddr/.env
         view_config "deploy"
     fi
 }
@@ -393,7 +410,9 @@ deploy_xray() {
     KEYPAIR=$(/usr/local/bin/xray x25519)
     PK=$(echo "$KEYPAIR" | grep -i "Private" | awk '{print $NF}')
     PBK=$(echo "$KEYPAIR" | grep -i "Public" | awk '{print $NF}')
-    UUID=$(uuidgen); SHORT_ID=$(openssl rand -hex 4 | tr -d '\n\r'); SS_PASS=$(openssl rand -base64 16 | tr -d '\n\r')
+    if [[ -z "$PK" ]]; then echo -e "${RED}[!] 异常: 系统熵池耗尽或核心异常，Xray 密钥生成失败！ / Keygen failed.${NC}"; exit 1; fi
+    
+    UUID=$(generate_robust_uuid); SHORT_ID=$(openssl rand -hex 4 | tr -d '\n\r'); SS_PASS=$(openssl rand -base64 16 | tr -d '\n\r')
 
     JSON_VLESS=$(cat << EOF
     {
@@ -438,6 +457,7 @@ EOF
   ]
 }
 EOF
+    chmod 600 /usr/local/etc/xray/config.json
 
     if [[ "$INIT_SYS" == "systemd" ]]; then
         cat > /etc/systemd/system/xray.service << SVC_EOF
@@ -480,6 +500,7 @@ SVC_EOF
     cat > /etc/ddr/.env << ENV_EOF
 CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="${GLOBAL_PUBLIC_IP}"
 ENV_EOF
+    chmod 600 /etc/ddr/.env
     view_config "deploy"
 }
 
@@ -487,23 +508,25 @@ deploy_singbox() {
     local MODE=$1; clear; echo -e "${BOLD}${GREEN} 部署 Sing-box 核心 / Deploying Sing-box [$MODE] ${NC}"
     init_system_environment; pre_install_setup "singbox" "$MODE"; release_ports; get_architecture
     
-    # 修复通配符溢出：强行清理历史残留，确保解压不出错
+    # 精准解压与二进制提取，避免通配符溢出风险
     rm -rf /tmp/sing-box-* /tmp/singbox_core.tar.gz 2>/dev/null
     
     fetch_github_release "SagerNet/sing-box" "linux-${SB_ARCH}.tar.gz" "singbox_core.tar.gz"
     tar -xzf "/tmp/singbox_core.tar.gz" -C /tmp || { echo -e "${RED}[!] 异常: 压缩包损坏或解压失败！${NC}"; exit 1; }
-    mv /tmp/sing-box-*/sing-box /usr/local/bin/; chmod +x /usr/local/bin/sing-box
+    find /tmp/sing-box-* -maxdepth 1 -type f -name "sing-box" -exec mv {} /usr/local/bin/sing-box \; -quit
+    chmod +x /usr/local/bin/sing-box
 
     KEYPAIR=$(/usr/local/bin/sing-box generate reality-keypair)
     PK=$(echo "$KEYPAIR" | grep -i "Private" | awk '{print $NF}')
     PBK=$(echo "$KEYPAIR" | grep -i "Public" | awk '{print $NF}')
     if [[ -z "$PK" ]]; then echo -e "${RED}[!] 异常: 系统熵池耗尽，密钥对生成失败 / Generation failed.${NC}"; exit 1; fi
 
-    UUID=$(uuidgen); SHORT_ID=$(openssl rand -hex 4 | tr -d '\n\r'); SS_PASS=$(openssl rand -base64 16 | tr -d '\n\r')
+    UUID=$(generate_robust_uuid); SHORT_ID=$(openssl rand -hex 4 | tr -d '\n\r'); SS_PASS=$(openssl rand -base64 16 | tr -d '\n\r')
     HY2_PASS=$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9'); HY2_OBFS=$(openssl rand -base64 8 | tr -dc 'a-zA-Z0-9')
     
     mkdir -p /etc/sing-box; openssl ecparam -genkey -name prime256v1 -out /etc/sing-box/hy2.key 2>/dev/null
     openssl req -new -x509 -days 36500 -key /etc/sing-box/hy2.key -out /etc/sing-box/hy2.crt -subj "/CN=${HY2_SNI}" 2>/dev/null
+    chmod 600 /etc/sing-box/hy2.key
 
     JSON_VLESS=$(cat << EOF
     {
@@ -557,6 +580,7 @@ EOF
   ]
 }
 EOF
+    chmod 600 /etc/sing-box/config.json
 
     if [[ "$INIT_SYS" == "systemd" ]]; then
         cat > /etc/systemd/system/sing-box.service << SVC_EOF
@@ -609,6 +633,7 @@ SVC_EOF
     cat > /etc/ddr/.env << ENV_EOF
 CORE="singbox"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="${GLOBAL_PUBLIC_IP}"
 ENV_EOF
+    chmod 600 /etc/ddr/.env
     view_config "deploy"
 }
 
@@ -895,18 +920,21 @@ net.ipv4.tcp_mem = 25600 51200 102400
 net.ipv4.tcp_rmem = 4096 87380 67108864
 net.ipv4.tcp_wmem = 4096 65536 67108864
 net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_notsent_lowat = 16384
 net.core.netdev_max_backlog = 250000
 net.core.somaxconn = 32768
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 EOF
 
-    if [[ "$release" == "alpine" ]]; then
-        for conf in /etc/sysctl.d/*.conf /etc/sysctl.conf; do
-            [[ -f "$conf" ]] && sysctl -p "$conf" >/dev/null 2>&1 || true
-        done
-    else
-        sysctl --system >/dev/null 2>&1 || true
+    if command -v sysctl >/dev/null 2>&1; then
+        if [[ "$release" == "alpine" ]]; then
+            for conf in /etc/sysctl.d/*.conf /etc/sysctl.conf; do
+                [[ -f "$conf" ]] && sysctl -p "$conf" >/dev/null 2>&1 || true
+            done
+        else
+            sysctl --system >/dev/null 2>&1 || true
+        fi
     fi
     
     echo -e "${GREEN}✔ 内核 BBR 配置块及最大并发映射文件已成功熔接至系统底层！ / Subsystem Kernel Parameters Updated.${NC}"
@@ -926,7 +954,7 @@ vps_benchmark_menu() {
     case $bench_choice in
         1) 
             clear; echo -e "${GREEN}正在运行 bench.sh... / Running bench.sh...${NC}"
-            wget -qO- bench.sh | bash
+            wget -qO- https://bench.sh | bash
             read -ep "按回车返回主菜单 / Press Enter to return..."
             ;;
         2)
@@ -945,7 +973,9 @@ setup_shortcut
 GLOBAL_PUBLIC_IP=""
 
 while true; do
-    [[ -z "$GLOBAL_PUBLIC_IP" || "$GLOBAL_PUBLIC_IP" == "N/A" ]] && GLOBAL_PUBLIC_IP=$(curl -s4m3 api.ipify.org || curl -s6m3 api64.ipify.org || echo "N/A")
+    if [[ -z "$GLOBAL_PUBLIC_IP" || "$GLOBAL_PUBLIC_IP" == "N/A" ]]; then
+        GLOBAL_PUBLIC_IP=$(curl -s4m2 api.ipify.org 2>/dev/null || curl -s6m2 api64.ipify.org 2>/dev/null || echo "N/A")
+    fi
     
     STATUS_STR=""
     is_service_running xray && STATUS_STR="${GREEN}Xray-Core${NC} "
@@ -957,7 +987,7 @@ while true; do
     
     clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${PURPLE}  Aio-box Ultimate Console [Apex V56 Absolute Perfect Final] ${NC}\n${BLUE}======================================================================${NC}"
     echo -e " 连通网关: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 物理运行栈: $STATUS_STR $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
-    echo -e " ${YELLOW}[ Xray-core 独立容器部署 ]${NC}           ${CYAN}[ Sing-box 聚合架构部署 ]${NC}"
+    echo -e " ${YELLOW}[ Xray-core 独立容器部署 ]${NC}            ${CYAN}[ Sing-box 聚合架构部署 ]${NC}"
     echo -e " ${GREEN}1.${NC} VLESS-Vision (Reality)         ${GREEN}6.${NC} VLESS-Vision (Reality)"
     echo -e " ${GREEN}2.${NC} Shadowsocks                    ${GREEN}7.${NC} Shadowsocks"
     echo -e " ${GREEN}3.${NC} VLESS + SS 组合集群            ${GREEN}8.${NC} VLESS + SS 组合集群"
