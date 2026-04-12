@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ====================================================================================================
-# Aio-box Ultimate Console [Dual-Core Hybrid | Auto-Fix | Enterprise V9.9 Final Perfected]
-# [Deep Deterministic Reasoning Audited: Full Features, Extreme Stability, Safe I/O Operations]
+# Aio-box Ultimate Console [Dual-Core Hybrid | Auto-Fix | Enterprise V9.9.1 Final Perfected]
+# [Deep Deterministic Reasoning Audited: Syntax Error Fixed, Safe Iteration, Zero Non-Breaking Spaces]
 # ====================================================================================================
 
 umask 077
@@ -64,7 +64,6 @@ audit_hardware_resources() {
         echo -e "${YELLOW} -> [警告] 内存临界 (${TOTAL_MEM}MB)，已计算安全 GOMEMLIMIT 为 ${GOMEMLIMIT_MB}MB。${NC}"
         local SWAP_MEM=$(free -m | awk '/^Swap:/{print $2}')
         if [[ "$SWAP_MEM" -eq 0 ]]; then
-            # [物理层纠错] 采用 df -kP 确保长路径不换行，保障在任何极限 OS 环境中精准提取硬盘可用容量
             local VAR_AVAIL=$(df -kP /var | tail -n 1 | awk '{print int($4/1024)}')
             if [[ -n "$VAR_AVAIL" && "$VAR_AVAIL" -gt 1536 ]]; then
                 echo -e "${YELLOW} -> [算力干预] 磁盘安全验证通过，开辟 1024MB 虚拟内存防御 OOM Killer...${NC}"
@@ -130,16 +129,21 @@ enable_rps_rfs_and_offload() {
         if [[ -d "/sys/class/net/$INTERFACE/queues" ]]; then
             local cpu_count=$(nproc)
             local rps_mask=$(printf "%x" $(( (1 << cpu_count) - 1 )))
-            for rps_flow in /sys/class/net/$INTERFACE/queues/rx-*/rps_cpus 2>/dev/null; do
-                echo "$rps_mask" > "$rps_flow" 2>/dev/null || true
+            
+            # [完美语法修复] 将 2>/dev/null 移至 do 块内部命令中，解决 bash syntax error
+            shopt -s nullglob
+            for rps_flow in /sys/class/net/$INTERFACE/queues/rx-*/rps_cpus; do
+                [[ -f "$rps_flow" ]] && echo "$rps_mask" > "$rps_flow" 2>/dev/null || true
             done
-            for xps_flow in /sys/class/net/$INTERFACE/queues/tx-*/xps_cpus 2>/dev/null; do
-                echo "$rps_mask" > "$xps_flow" 2>/dev/null || true
+            for xps_flow in /sys/class/net/$INTERFACE/queues/tx-*/xps_cpus; do
+                [[ -f "$xps_flow" ]] && echo "$rps_mask" > "$xps_flow" 2>/dev/null || true
             done
             echo 65536 > /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null || true
-            for rfc_flow in /sys/class/net/$INTERFACE/queues/rx-*/rps_flow_cnt 2>/dev/null; do
-                echo 32768 > "$rfc_flow" 2>/dev/null || true
+            for rfc_flow in /sys/class/net/$INTERFACE/queues/rx-*/rps_flow_cnt; do
+                [[ -f "$rfc_flow" ]] && echo 32768 > "$rfc_flow" 2>/dev/null || true
             done
+            shopt -u nullglob
+            
             echo -e "${GREEN}    ✔ 网络软中断已均衡至全核心 (RPS/XPS)。${NC}"
         fi
     fi
