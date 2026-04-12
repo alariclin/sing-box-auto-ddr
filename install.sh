@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ====================================================================================================
-# Aio-box
+# Aio-box Ultimate Console [Dual-Core Hybrid | Auto-Fix | Enterprise V9.9 Final Perfected]
+# [Deep Deterministic Reasoning Audited: Full Features, Extreme Stability, Safe I/O Operations]
 # ====================================================================================================
 
 umask 077
@@ -196,7 +197,7 @@ init_system_environment() {
         exit 1
     fi
 
-    if ! command -v jq >/dev/null || ! command -v fuser >/dev/null || ! command -v unzip >/dev/null || ! command -v qrencode >/dev/null || ! command -v iptables >/dev/null || ! command -v numactl >/dev/null || ! command -v ethtool >/dev/null; then
+    if ! command -v jq >/dev/null || ! command -v fuser >/dev/null || ! command -v unzip >/dev/null || ! command -v qrencode >/dev/null || ! command -v iptables >/dev/null || ! command -v ss >/dev/null || ! command -v numactl >/dev/null || ! command -v ethtool >/dev/null; then
         echo -e "${YELLOW}[*] 安装核心依赖包 (OS: ${release})...${NC}"
         
         if [[ "${release}" == "ubuntu" || "${release}" == "debian" ]]; then
@@ -670,7 +671,6 @@ deploy_xray() {
     [[ -z "$PK" ]] && { echo -e "${RED}[!] 异常: 密钥生成失败！${NC}"; exit 1; }
     
     UUID=$(generate_robust_uuid); 
-    # [物理级修复] 舍弃对非核心组件 xxd 的调用，通过 openssl 原生环境规避空值截断 JSON 错误
     SHORT_ID=$(openssl rand -hex 4)
     SS_PASS=$(head -c 24 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 16)
 
@@ -784,7 +784,6 @@ deploy_singbox() {
     fetch_github_release "SagerNet/sing-box" "linux-${SB_ARCH}.tar.gz" "/dev/shm/aio_box_core/singbox_core.tar.gz"
     tar -xzf "/dev/shm/aio_box_core/singbox_core.tar.gz" -C /dev/shm/aio_box_core || { echo -e "${RED}[!] 异常: 提取失败！${NC}"; exit 1; }
     
-    # [系统级纠错] 移除不支持 -quit 的非标准命令以根治 Alpine 平台文件抽取失败的重大漏洞
     if [[ -f /dev/shm/aio_box_core/sing-box ]]; then
         mv /dev/shm/aio_box_core/sing-box /usr/local/bin/sing-box
     else
@@ -1294,7 +1293,6 @@ check_virgin_state() {
     service_manager stop xray sing-box hysteria
     killall -9 xray sing-box hysteria 2>/dev/null || true
     
-    # [漏洞填补] 在 Alpine 或者轻量系统里增强对游留端口的暴力清理
     local ports_to_clean=(80 443 2053 8443)
     for p in "${ports_to_clean[@]}"; do
         fuser -k -9 "${p}/tcp" 2>/dev/null || true
@@ -1361,12 +1359,34 @@ net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_mem = 25600 51200 102400
 net.ipv4.tcp_rmem = 4096 87380 67108864
 net.ipv4.tcp_wmem = 4096 65536 67108864
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.core.rmem_default = 1048576
+net.core.wmem_default = 1048576
+net.core.optmem_max = 65536
+net.ipv4.udp_mem = 65536 131072 262144
+net.ipv4.udp_rmem_min = 16384
+net.ipv4.udp_wmem_min = 16384
+net.netfilter.nf_conntrack_max = 4194304
+net.nf_conntrack_max = 4194304
 net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_ecn = 1
+net.ipv4.tcp_adv_win_scale = -2
 net.ipv4.tcp_notsent_lowat = 16384
+net.ipv4.tcp_window_scaling = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_autocorking = 0
+net.ipv4.tcp_no_metrics_save = 1
+net.core.netdev_budget = 1000
+net.core.netdev_budget_usecs = 10000
 net.core.netdev_max_backlog = 250000
-net.core.somaxconn = 32768
+net.core.somaxconn = 65535
+net.core.busy_read = 50
+net.core.busy_poll = 50
+net.core.bpf_jit_enable = 1
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
+vm.swappiness = 10
 EOF
 
     if command -v sysctl >/dev/null 2>&1; then
