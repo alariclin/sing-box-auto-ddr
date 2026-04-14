@@ -36,7 +36,7 @@
 
 * **自动化加密隧道部署**: 一键自动化安装 VLESS-Reality、Hysteria 2、Shadowsocks 等主流安全传输协议。支持自定义SNI和标准服务端口的物理链路复用与高性能分发。
 * **隐私增强与流量拟态技术**: 深度集成 Reality 架构与 uTLS 指纹模拟方案。通过原生拟态技术提升加密通讯流量的隐蔽性与私密性，有效保护数据在复杂网络环境下的传输安全。
-* **物理内核协议栈调优**: 自动注入并激活 BBR 拥塞控制算法。将系统 TCP 并发句柄及文件描述符提升至 **1,048,576** 的物理极限，彻底释放服务器带宽潜能。
+* **物理内核协议栈调优**: 自动注入并激活 BBR 拥塞控制算法。将系统 TCP 并发句柄及文件描述符提升至物理极限，彻底释放服务器带宽潜能。
 * **环境一致性自愈引擎**: 提供一键诊断修复。清理死锁端口及残留的冗余防火墙规则，确保系统环境恢复至“绝对真空”的纯净状态，解决底层冲突。
 * **自动化配额熔断机制**: 依托 vnstat 实时链路流量监控，支持预设月度流量使用阈值。在流量触顶时触发服务自动熔断保护。
 
@@ -115,7 +115,7 @@ sb
 
 * **Automated Encryption Tunnel Deployment**: Automatically install popular secure transmission protocols such as VLESS-Reality, Hysteria 2, and Shadowsocks with a single click. Support custom SNI and the reuse of standard server ports for physical link multiplexing and high-performance distribution.
 * **Privacy Enhancement and Traffic Mimicry Technology**: Deeply integrate the Reality architecture with the uTLS fingerprint simulation solution. Utilize native mimicry technology to enhance the concealment and privacy of encrypted communication traffic, effectively protecting data transmission security in complex network environments.
-* **Physical Kernel Protocol Stack Optimization**: Automatically inject and activate the BBR congestion control algorithm. Increase the system's TCP concurrent handles and file descriptors to the physical limit of **1,048,576**, fully releasing the server's bandwidth potential.
+* **Physical Kernel Protocol Stack Optimization**: Automatically inject and activate the BBR congestion control algorithm. Increase the system's TCP concurrent handles and file descriptors to the physical limit of fully releasing the server's bandwidth potential.
 * **Environment Consistency Self-healing Engine**: Provides one-click diagnostic and repair. Clean up deadlocked ports and redundant firewall rules to ensure the system environment is restored to an "absolutely clean" state, resolving underlying conflicts.
 * **Automated Quota Bursting Mechanism**: Relying on vnstat's real-time link traffic monitoring, support preset monthly traffic usage thresholds. Trigger automatic service bursting protection when traffic reaches the limit.
 
