@@ -177,4 +177,7 @@ If you encounter any issues or have suggestions, please submit them via:
 
 ## 📄 许可证 / License
 
-本项目采用 [Apache License 2.0](LICENSE) 许可证。
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+本项目采用 **[Apache License 2.0](LICENSE)** 许可证进行授权。
+This project is licensed under the **[Apache License 2.0](LICENSE)**.
