@@ -169,5 +169,6 @@ sb
 ## 🤝 反馈与交流 / Feedback & Support
 If you encounter any issues or have suggestions, please submit them via:
 * [GitHub Issues](https://github.com/alariclin/aio-box/issues)
+
 ## 📄 许可证 / License
-[MIT License](https://opensource.org/licenses/MIT).
+本项目采用 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.html) 开源许可证。
