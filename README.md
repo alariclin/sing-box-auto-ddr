@@ -77,6 +77,7 @@ sb
 ```
 ---
 ### 📋面板菜单速览：
+
 * 1-10: 核心架构编排 - 分别对应 Xray (1-5) 与 Sing-box (6-10) 的部署组合。
 * 11: 测速与 IP 审计 - 调用 bench.sh 与 Check.Place 检测 VPS 性能与 IP 欺诈分。
 * 12: VPS 一键优化 - 物理注入 BBR 算法并提升内核并发句柄。
@@ -96,6 +97,7 @@ sb
 **Aio-box** It is an automated network encryption tunnel deployment script specifically designed for Linux servers. It integrates the current mainstream network security proxy protocols (such as VLESS-Reality, Shadowsocks-2022, Hysteria 2, etc.), aiming to help users quickly set up a secure, private and efficient cross-domain data transmission environment, while providing system-level optimization and anti-blockage self-healing mechanisms.
 
 > ⚠️ Compliance & Disclaimer：This project is positioned as an automated tool for network architecture testing, cybersecurity research, and personal privacy protection.
+
 > 1. Legal Compliance: It is strictly prohibited to use the scripts and technologies provided by this project for any activities that violate the laws and regulations of your country or region. Users must ensure their actions comply with local telecommunications, cybersecurity, and internet service regulations.
 > 2. Limitation of Liability: This project is intended for technical exchange, protocol research, and legitimate privacy enhancement under authorized environments. The user shall bear full responsibility for any legal consequences or security risks arising from non-compliance or improper use. The developers shall not be held liable for any such actions.
 > 3. Technical Intent: The encryption protocols and routing technologies involved are designed to enhance data transmission security. Use of this tool for illegal attacks, unauthorized network access, or endangering network infrastructure is strictly forbidden.
@@ -149,6 +151,7 @@ sb
 ```
 ---
 ### 📋 Panel Menu Overview:
+
 * **1-10**: Core Architecture Arrangement - Corresponding to the deployment combinations of Xray (1-5) and Sing-box (6-10).
 * **11**: Speed Measurement and IP Audit - Calling bench.sh and Check.Place to detect VPS performance and IP fraud scores.
 * **12**: One-click VPS Optimization - Physically inject BBR algorithm and enhance kernel concurrent handles.
@@ -162,13 +165,16 @@ sb
 ---
 
 ## 💻 系统要求 / System Requirements
+
 * **OS**: Debian 10+, Ubuntu 20.04+, CentOS 8+, AlmaLinux, Rocky Linux, Alpine Linux (Full Support).
 * **Init System**: Systemd or OpenRC is strictly required for daemon persistence.
 * **Network**: Dual-stack IPv4 / IPv6 resolution fully supported.
 
 ## 🤝 反馈与交流 / Feedback & Support
+
 If you encounter any issues or have suggestions, please submit them via:
 * [GitHub Issues](https://github.com/alariclin/aio-box/issues)
 
 ## 📄 许可证 / License
-本项目采用 [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.html) 开源许可证。
+
+本项目采用 [Apache License 2.0](LICENSE) 许可证。
