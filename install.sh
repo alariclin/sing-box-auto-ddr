@@ -166,14 +166,14 @@ allowPort() {
     fi
 }
 clean_nat_rules() {
-    while $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q "20000:50000"; do
-        local LOCAL_RULE=$($IPT -w -t nat -S PREROUTING 2>/dev/null | grep "20000:50000" | head -n 1 | sed 's/^-A /-D /')
+    while $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q "30000:60000"; do
+        local LOCAL_RULE=$($IPT -w -t nat -S PREROUTING 2>/dev/null | grep "30000:60000" | head -n 1 | sed 's/^-A /-D /')
         [[ -z "$LOCAL_RULE" ]] && break
         eval $IPT -w -t nat $LOCAL_RULE 2>/dev/null || break
     done
     if has_ipv6; then
-        while $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q "20000:50000"; do
-            local LOCAL_RULE6=$($IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep "20000:50000" | head -n 1 | sed 's/^-A /-D /')
+        while $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q "30000:60000"; do
+            local LOCAL_RULE6=$($IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep "30000:60000" | head -n 1 | sed 's/^-A /-D /')
             [[ -z "$LOCAL_RULE6" ]] && break
             eval $IPT6 -w -t nat $LOCAL_RULE6 2>/dev/null || break
         done
@@ -419,7 +419,7 @@ pre_install_setup() {
     local DEF_V_SNI="www.microsoft.com"
     local DEF_H_SNI="images.apple.com"
     local DEF_V_PORT=443
-    local DEF_H_PORT=443
+    local DEF_H_PORT=42588
     local DEF_S_PORT=2053
     echo -e "\n${CYAN}======================================================================${NC}"
     echo -e "${BOLD}🚀 参数构造向导 / Pre-deployment Wizard [Engine: $CORE | Mode: $MODE]${NC}"
@@ -433,8 +433,12 @@ pre_install_setup() {
     if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
         read -ep "   [HY2] 请输入伪装 SNI / Enter camouflage SNI (回车默认: $DEF_H_SNI): " INPUT_H_SNI
         HY2_SNI=${INPUT_H_SNI:-$DEF_H_SNI}
-        read -ep "   [HY2] 请输入监听端口 / Enter listening port (回车默认: $DEF_H_PORT): " INPUT_H_PORT
+        read -ep "   [HY2] 请输入监听端口 (强制建议非 443 端口) (回车默认: $DEF_H_PORT): " INPUT_H_PORT
         HY2_PORT=${INPUT_H_PORT:-$DEF_H_PORT}
+        read -ep "   [HY2] 请输入您本地宽带【下行】速率(Mbps, 例如 300) (回车默认: 1000): " INPUT_H_DOWN
+        HY2_DOWN=${INPUT_H_DOWN:-1000}
+        read -ep "   [HY2] 请输入您本地宽带【上行】速率(Mbps, 例如 50) (回车默认: 100): " INPUT_H_UP
+        HY2_UP=${INPUT_H_UP:-100}
     fi
     if [[ "$MODE" == *"SS"* ]] || [[ "$MODE" == *"ALL"* ]]; then
         read -ep "   [SS] 请输入备用监听端口 / Enter backup port (回车默认: $DEF_S_PORT): " INPUT_S_PORT
@@ -475,20 +479,20 @@ auth:
   type: password
   password: ${HY2_PASS}
 bandwidth:
-  up: 3000 mbps
-  down: 3000 mbps
+  up: ${HY2_UP} mbps
+  down: ${HY2_DOWN} mbps
 EOF
     chmod 600 /etc/hysteria/config.yaml
     if [[ "$INIT_SYS" == "systemd" ]]; then
-        HY2_PRE_START="ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
-ExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
-        HY2_POST_STOP="ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
+        HY2_PRE_START="ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
+        HY2_POST_STOP="ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
         if has_ipv6; then
             HY2_PRE_START="$HY2_PRE_START
-ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
-ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
+ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -A PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
             HY2_POST_STOP="$HY2_POST_STOP
-ExecStopPost=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
+ExecStopPost=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
         fi
         cat > /etc/systemd/system/hysteria.service << SVC_EOF
 [Unit]
@@ -511,16 +515,16 @@ SVC_EOF
         mkdir -p /etc/conf.d
         echo 'rc_ulimit="-n 1048576"' > /etc/conf.d/hysteria
         HY2_RC_PRE="start_pre() {
-  $IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
-  $IPT -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
+  $IPT -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT -w -t nat -A PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
         HY2_RC_POST="stop_post() {
-  $IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
+  $IPT -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
         if has_ipv6; then
             HY2_RC_PRE="$HY2_RC_PRE
-  $IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
-  $IPT6 -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
+  $IPT6 -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -A PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
             HY2_RC_POST="$HY2_RC_POST
-  $IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
+  $IPT6 -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
         fi
         HY2_RC_PRE="$HY2_RC_PRE
   return 0
@@ -549,7 +553,7 @@ SVC_EOF
     
     if [[ "$IS_SILENT" != "SILENT" ]]; then
         cat > /etc/ddr/.env << ENV_EOF
-CORE="hysteria"; MODE="HY2"; UUID=""; VLESS_SNI=""; VLESS_PORT=""; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT=""; PUBLIC_KEY=""; SHORT_ID=""; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS=""; LINK_IP="${GLOBAL_PUBLIC_IP}"
+CORE="hysteria"; MODE="HY2"; UUID=""; VLESS_SNI=""; VLESS_PORT=""; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; HY2_UP="$HY2_UP"; HY2_DOWN="$HY2_DOWN"; SS_PORT=""; PUBLIC_KEY=""; SHORT_ID=""; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS=""; LINK_IP="${GLOBAL_PUBLIC_IP}"
 ENV_EOF
         chmod 600 /etc/ddr/.env
         view_config "deploy"
@@ -666,7 +670,7 @@ SVC_EOF
         deploy_official_hy2 "SILENT"
     fi
     cat > /etc/ddr/.env << ENV_EOF
-CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="${GLOBAL_PUBLIC_IP}"
+CORE="xray"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; HY2_UP="$HY2_UP"; HY2_DOWN="$HY2_DOWN"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="${GLOBAL_PUBLIC_IP}"
 ENV_EOF
     chmod 600 /etc/ddr/.env
     view_config "deploy"
@@ -710,7 +714,7 @@ EOF
 )
     JSON_HY2=$(cat << EOF
     {
-      "type": "hysteria2", "listen": "::", "listen_port": ${HY2_PORT}, "up_mbps": 3000, "down_mbps": 3000,
+      "type": "hysteria2", "listen": "::", "listen_port": ${HY2_PORT}, "up_mbps": ${HY2_UP}, "down_mbps": ${HY2_DOWN},
       "obfs": { "type": "salamander", "password": "${HY2_OBFS}" },
       "users": [{"password": "${HY2_PASS}"}],
       "tls": { "enabled": true, "certificate_path": "/etc/sing-box/hy2.crt", "key_path": "/etc/sing-box/hy2.key" }
@@ -757,15 +761,15 @@ EOF
         SB_PRE_START=""
         SB_POST_STOP=""
         if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
-            SB_PRE_START="ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
-ExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
-            SB_POST_STOP="ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
+            SB_PRE_START="ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
+            SB_POST_STOP="ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
             if has_ipv6; then
                 SB_PRE_START="$SB_PRE_START
-ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
-ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
+ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -A PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
                 SB_POST_STOP="$SB_POST_STOP
-ExecStopPost=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
+ExecStopPost=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true'"
             fi
         fi
         cat > /etc/systemd/system/sing-box.service << SVC_EOF
@@ -792,16 +796,16 @@ SVC_EOF
         SB_RC_POST=""
         if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
             SB_RC_PRE="start_pre() {
-  $IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
-  $IPT -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
+  $IPT -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT -w -t nat -A PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
             SB_RC_POST="stop_post() {
-  $IPT -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
+  $IPT -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
             if has_ipv6; then
                 SB_RC_PRE="$SB_RC_PRE
-  $IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
-  $IPT6 -w -t nat -A PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
+  $IPT6 -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -A PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
                 SB_RC_POST="$SB_RC_POST
-  $IPT6 -w -t nat -D PREROUTING -p udp --dport 20000:50000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
+  $IPT6 -w -t nat -D PREROUTING -p udp --dport 30000:60000 -j REDIRECT --to-ports $HY2_PORT 2>/dev/null || true"
             fi
             SB_RC_PRE="$SB_RC_PRE
   return 0
@@ -831,7 +835,7 @@ SVC_EOF
     setup_health_monitor
     
     cat > /etc/ddr/.env << ENV_EOF
-CORE="singbox"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="${GLOBAL_PUBLIC_IP}"
+CORE="singbox"; MODE="$MODE"; UUID="$UUID"; VLESS_SNI="$VLESS_SNI"; VLESS_PORT="$VLESS_PORT"; HY2_SNI="$HY2_SNI"; HY2_PORT="$HY2_PORT"; HY2_UP="$HY2_UP"; HY2_DOWN="$HY2_DOWN"; SS_PORT="$SS_PORT"; PUBLIC_KEY="$PBK"; SHORT_ID="$SHORT_ID"; HY2_PASS="$HY2_PASS"; HY2_OBFS="$HY2_OBFS"; SS_PASS="$SS_PASS"; LINK_IP="${GLOBAL_PUBLIC_IP}"
 ENV_EOF
     chmod 600 /etc/ddr/.env
     view_config "deploy"
@@ -947,7 +951,7 @@ view_config() {
         generate_qr "$VLESS_URL"
     fi
     if [[ "$MODE" == *"HY2"* ]] || [[ "$MODE" == *"ALL"* ]]; then
-        HY2_URL="hysteria2://$HY2_PASS@$F_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=20000-50000#Aio-Hy2"
+        HY2_URL="hysteria2://$HY2_PASS@$F_IP:$HY2_PORT/?insecure=1&sni=$HY2_SNI&alpn=h3&obfs=salamander&obfs-password=$HY2_OBFS&mport=30000-60000#Aio-Hy2"
         echo -e "${YELLOW}[ Hysteria 2 暴力拥塞穿透链路 / Hy2 URI ]${NC}\n(警告: 基于自签证书防溯源策略，客户端务必开启 \"允许不安全\" / Allow insecure flag)\n${GREEN}${HY2_URL}${NC}"
         generate_qr "$HY2_URL"
     fi
@@ -985,7 +989,7 @@ EOF
     type: hysteria2
     server: $LINK_IP
     port: $HY2_PORT
-    ports: 20000-50000
+    ports: 30000-60000
     password: $HY2_PASS
     alpn: [h3]
     sni: $HY2_SNI
@@ -1155,9 +1159,9 @@ check_virgin_state() {
         echo -e "${GREEN} ✔ 校验通过: 未发现寻址层争抢冲突 / Process logic healthy.${NC}"
     fi
     echo -e "\n\033[1;36m[2/5] 探查底层 Linux 内核 TCP/IP 过滤链栈 / Analyzing Netfilter topology...\033[0m"
-    local NAT_C=$($IPT -t nat -S PREROUTING 2>/dev/null | grep -i "20000:50000")
+    local NAT_C=$($IPT -t nat -S PREROUTING 2>/dev/null | grep -i "30000:60000")
     local INP_C=$($IPT -S INPUT 2>/dev/null | grep -i "Aio-box-")
-    local NAT_C6=$($IPT6 -t nat -S PREROUTING 2>/dev/null | grep -i "20000:50000")
+    local NAT_C6=$($IPT6 -t nat -S PREROUTING 2>/dev/null | grep -i "30000:60000")
     local INP_C6=$($IPT6 -S INPUT 2>/dev/null | grep -i "Aio-box-")
     if [[ -n "$NAT_C" || -n "$INP_C" || -n "$NAT_C6" || -n "$INP_C6" ]]; then
         echo -e "${YELLOW} [!] 捕获到废弃的虚假转发脏路由表。执行无损阻断剔除 / Executing targeted firewall reset...${NC}"
