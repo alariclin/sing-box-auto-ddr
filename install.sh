@@ -908,7 +908,7 @@ traffic_management_menu() {
     echo -e "${CYAN} ► rx (Receive)  : 入站流量 / Inbound (Data flowing INTO the VPS)${NC}"
     echo -e "${CYAN} ► tx (Transmit) : 出站流量 / Outbound (Data flowing FROM the VPS)${NC}"
     echo -e "${CYAN} ► total (Total) : 总吞吐量 / Total (Sum of Inbound and Outbound)${NC}"
-    echo -e "${MAGENTA} [提示] VPS 计费通常仅针对 tx (出站) 流量收费/The VPS billing is usually charged only for tx (outbound) traffic${NC}"
+    echo -e "${MAGENTA} [提示] AWS/GCP 计费通常仅针对 tx (出站) 流量收费。${NC}"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     
     if command -v vnstat >/dev/null 2>&1; then
@@ -932,11 +932,11 @@ traffic_management_menu() {
     echo -e "${CYAN}======================================================================${NC}"
     echo -e "${YELLOW}1. 设定/修改每月流量上限 (Set/Modify Monthly Traffic Limit)${NC}\n${YELLOW}2. 解除流量限制 (Disable Traffic Limit)${NC}\n${GREEN}0. 返回主菜单 / Return to Main Menu${NC}"
     echo -e "${CYAN}======================================================================${NC}"
-    read -p " 请选择 / Select [0-2]: " tr_choice
+    read -ep " 请选择 / Select [0-2]: " tr_choice
     
     case $tr_choice in
         1)
-            read -p " 请输入每月总流量上限(GB)，纯数字 / Enter monthly traffic limit (GB), numbers only: " limit_gb
+            read -ep " 请输入每月总流量上限(GB)，纯数字 / Enter monthly traffic limit (GB), numbers only: " limit_gb
             if [[ "$limit_gb" =~ ^[0-9]+$ ]]; then
                 sed -i '/TRAFFIC_LIMIT_GB/d' /etc/ddr/.env 2>/dev/null
                 echo "TRAFFIC_LIMIT_GB=\"$limit_gb\"" >> /etc/ddr/.env
@@ -945,13 +945,13 @@ traffic_management_menu() {
             else
                 echo -e "${RED}[!] 输入无效，请输入纯数字。 / Invalid input, please enter numbers only.${NC}"
             fi
-            read -p "按回车返回 / Press Enter to return..."
+            read -ep "按回车返回 / Press Enter to return..."
             ;;
         2)
             sed -i '/TRAFFIC_LIMIT_GB/d' /etc/ddr/.env 2>/dev/null
             disable_traffic_monitor
             echo -e "${GREEN}✔ 流量限制已成功解除。 / Traffic limit successfully disabled.${NC}"
-            read -p "按回车返回 / Press Enter to return..."
+            read -ep "按回车返回 / Press Enter to return..."
             ;;
         *) return 0 ;;
     esac
@@ -1102,7 +1102,7 @@ force_update_geo() {
     echo -e "${YELLOW}[*] 正在拉取 Loyalsoldier 增强版 Geo 资源并执行校验... / Fetching Geo Data...${NC}"
     setup_geo_cron
     bash /etc/ddr/geo_update.sh
-    echo -e "${GREEN}✔ Geo 资源更新与校验成功，已覆盖核心文件并完成热重载！${NC}\n${GREEN}✔ 定时任务已同步下发：每周一夜里 3:00 自动静默执行闭闭环更新。${NC}"
+    echo -e "${GREEN}✔ Geo 资源更新与校验成功，已覆盖核心文件并完成热重载！${NC}\n${GREEN}✔ 定时任务已同步下发：每周一夜里 3:00 自动静默执行闭环更新。${NC}"
     read -ep "按回车返回..."
 }
 ota_and_geo_menu() {
@@ -1308,7 +1308,7 @@ EOF
         echo -e "${GREEN}   ✔ 环形防御矩阵状态: 已激活${NC}"
     fi
 
-    # 检测 4. Geosite 黑名单注入
+    # 检测 4. Geosite 黑名单与探针注入 (彻底隔离 Xray 与 Sing-box 的配置写入逻辑)
     if [[ -f /usr/local/etc/xray/config.json ]] && ! grep -q "category-ads-all" /usr/local/etc/xray/config.json; then
         if command -v jq >/dev/null 2>&1; then
             jq '.routing.rules += [{"type": "field", "domain": ["geosite:category-ads-all"], "outboundTag": "block"}] | .log = {"loglevel": "warning", "access": "/var/log/aio-box-xray.log"}' /usr/local/etc/xray/config.json > /tmp/xp.json && mv /tmp/xp.json /usr/local/etc/xray/config.json
@@ -1316,11 +1316,12 @@ EOF
             echo -e "${GREEN}   ✔ Xray 路由拦截黑名单与日志持久化已热重载！${NC}"
         fi
     fi
-    if [[ -f /etc/sing-box/config.json ]] && ! grep -q "category-ads-all" /etc/sing-box/config.json; then
+    # [漏洞修复区] 仅给 Sing-box 配置日志路径，绝对不碰它的路由表，彻底封杀二次崩溃的可能
+    if [[ -f /etc/sing-box/config.json ]] && ! grep -q "aio-box-singbox.log" /etc/sing-box/config.json; then
         if command -v jq >/dev/null 2>&1; then
-            jq '.route.rules += [{"geosite": ["category-ads-all"], "outbound": "block"}] | .log = {"level": "warn", "output": "/var/log/aio-box-singbox.log"}' /etc/sing-box/config.json > /tmp/sp.json && mv /tmp/sp.json /etc/sing-box/config.json
+            jq '.log = {"level": "warn", "output": "/var/log/aio-box-singbox.log"}' /etc/sing-box/config.json > /tmp/sp.json && mv /tmp/sp.json /etc/sing-box/config.json
             service_manager start sing-box 2>/dev/null
-            echo -e "${GREEN}   ✔ Sing-box 路由拦截黑名单与日志持久化已热重载！${NC}"
+            echo -e "${GREEN}   ✔ Sing-box 日志持久化探针已安全热重载！${NC}"
         fi
     fi
 
@@ -1363,11 +1364,11 @@ while true; do
     clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${YELLOW} ==============================Aio-box===============================${NC}\n${BLUE}======================================================================${NC}"
     echo -e " 网关/Gateway: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 核心/Core: $STATUS_STR $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${YELLOW}[ Xray-core 部署/Deployment ]${NC} ${YELLOW}[ Sing-box 部署/Deployment ]${NC}"
-    echo -e " ${GREEN}1.${NC} VLESS-Reality ${GREEN}                6.${NC} VLESS-Reality"
-    echo -e " ${GREEN}2.${NC} Shadowsocks-2022 ${GREEN}             7.${NC} Shadowsocks-2022"
-    echo -e " ${GREEN}3.${NC} VLESS + SS-2022 ${GREEN}              8.${NC} VLESS + SS-2022"
-    echo -e " ${GREEN}4.${NC} Hysteria 2 (原生/Apernet) ${GREEN}    9.${NC} Hysteria 2 (Sing-box)"
-    echo -e " ${GREEN}5.${NC} 全协议三合一/All (Xray+Hy2) ${GREEN} 10.${NC} 全协议三合一/All (Sing-box)"
+    echo -e " ${GREEN}1.${NC} VLESS-Reality ${GREEN}             6.${NC} VLESS-Reality"
+    echo -e " ${GREEN}2.${NC} Shadowsocks-2022 ${GREEN}          7.${NC} Shadowsocks-2022"
+    echo -e " ${GREEN}3.${NC} VLESS + SS-2022 ${GREEN}           8.${NC} VLESS + SS-2022"
+    echo -e " ${GREEN}4.${NC} Hysteria 2 (原生/Apernet) ${GREEN}  9.${NC} Hysteria 2 (Sing-box)"
+    echo -e " ${GREEN}5.${NC} 全协议三合一/All (Xray+Hy2) ${GREEN}10.${NC} 全协议三合一/All (Sing-box)"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${GREEN}11.${NC} 本机配置与IP测速纯净度 / The purity of local configuration and IP speed test"
     echo -e " ${GREEN}12.${NC} VPS一键优化 / VPS One-click Optimization"
@@ -1377,7 +1378,7 @@ while true; do
     echo -e " ${GREEN}16.${NC} 一键全部清空卸载 / One-click to completely clear and uninstall"
     echo -e " ${GREEN}17.${NC} 删除全部节点与环境初始化 / Delete all nodes and perform environment initialization"
     echo -e " ${GREEN}18.${NC} 每月流量管控限制 / Monthly Traffic Management Limit"
-    echo -e " ${GREEN} 0.${NC} 退出脚本 / Exit Script"
+    echo -e " ${GREEN}0.${NC}  退出脚本 / Exit Script"
     echo -e "${BLUE}======================================================================${NC}"
     read -ep " 请求下发执行代号 / Request input command: " choice
     
