@@ -1364,10 +1364,10 @@ while true; do
     clear; echo -e "${BLUE}======================================================================${NC}\n${BOLD}${YELLOW} ==============================Aio-box===============================${NC}\n${BLUE}======================================================================${NC}"
     echo -e " 网关/Gateway: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 核心/Core: $STATUS_STR $CUR_MODE\n${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${YELLOW}[ Xray-core 部署/Deployment ]${NC} ${YELLOW}[ Sing-box 部署/Deployment ]${NC}"
-    echo -e " ${GREEN}1.${NC} VLESS-Reality ${GREEN}             6.${NC} VLESS-Reality"
-    echo -e " ${GREEN}2.${NC} Shadowsocks-2022 ${GREEN}          7.${NC} Shadowsocks-2022"
-    echo -e " ${GREEN}3.${NC} VLESS + SS-2022 ${GREEN}           8.${NC} VLESS + SS-2022"
-    echo -e " ${GREEN}4.${NC} Hysteria 2 (原生/Apernet) ${GREEN}  9.${NC} Hysteria 2 (Sing-box)"
+    echo -e " ${GREEN}1.${NC} VLESS-Reality ${GREEN}               6.${NC} VLESS-Reality"
+    echo -e " ${GREEN}2.${NC} Shadowsocks-2022 ${GREEN}            7.${NC} Shadowsocks-2022"
+    echo -e " ${GREEN}3.${NC} VLESS + SS-2022 ${GREEN}             8.${NC} VLESS + SS-2022"
+    echo -e " ${GREEN}4.${NC} Hysteria 2 (原生/Apernet) ${GREEN}   9.${NC} Hysteria 2 (Sing-box)"
     echo -e " ${GREEN}5.${NC} 全协议三合一/All (Xray+Hy2) ${GREEN}10.${NC} 全协议三合一/All (Sing-box)"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     echo -e " ${GREEN}11.${NC} 本机配置与IP测速纯净度 / The purity of local configuration and IP speed test"
@@ -1378,7 +1378,7 @@ while true; do
     echo -e " ${GREEN}16.${NC} 一键全部清空卸载 / One-click to completely clear and uninstall"
     echo -e " ${GREEN}17.${NC} 删除全部节点与环境初始化 / Delete all nodes and perform environment initialization"
     echo -e " ${GREEN}18.${NC} 每月流量管控限制 / Monthly Traffic Management Limit"
-    echo -e " ${GREEN}0.${NC}  退出脚本 / Exit Script"
+    echo -e " ${GREEN}0 .${NC}  退出脚本 / Exit Script"
     echo -e "${BLUE}======================================================================${NC}"
     read -ep " 请求下发执行代号 / Request input command: " choice
     
