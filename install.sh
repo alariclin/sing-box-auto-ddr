@@ -905,10 +905,10 @@ traffic_management_menu() {
     
     echo -e "${YELLOW}[网卡 (Interface) ${INTERFACE} 当前月流量统计 / Current Month Traffic Statistics]${NC}"
     
-    # === 新增：优雅的中英文数据释义图例 ===
-    echo -e "${CYAN} ► rx (Receive)  : 下行下载流量 / Download (Inbound to VPS)${NC}"
-    echo -e "${CYAN} ► tx (Transmit) : 上行上传流量 / Upload (Outbound from VPS)${NC}"
-    echo -e "${CYAN} ► total (Total) : 计费总消耗量 / Total Usage (Usually billed data)${NC}"
+    echo -e "${CYAN} ► rx (Receive)  : 入站流量 / Inbound (Data flowing INTO the VPS)${NC}"
+    echo -e "${CYAN} ► tx (Transmit) : 出站流量 / Outbound (Data flowing FROM the VPS)${NC}"
+    echo -e "${CYAN} ► total (Total) : 总吞吐量 / Total (Sum of Inbound and Outbound)${NC}"
+    echo -e "${MAGENTA} [提示] AWS/GCP 计费通常仅针对 tx (出站) 流量收费。${NC}"
     echo -e "${BLUE}----------------------------------------------------------------------${NC}"
     
     if command -v vnstat >/dev/null 2>&1; then
