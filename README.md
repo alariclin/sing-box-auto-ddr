@@ -35,26 +35,26 @@
 全球通道：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh > A-BOX.sh && sudo bash A-BOX.sh
+curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > a-box.sh && sudo bash a-box.sh
 ```
 
 镜像通道：
 
 ```bash
-curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh > A-BOX.sh && sudo bash A-BOX.sh
+curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > a-box.sh && sudo bash a-box.sh
 ```
 
 指定语言启动：
 
 ```bash
-sudo bash A-BOX.sh --lang zh
-sudo bash A-BOX.sh --lang en
+sudo bash a-box.sh --lang zh
+sudo bash a-box.sh --lang en
 ```
 
 静态自测：
 
 ```bash
-sudo bash A-BOX.sh --self-test
+sudo bash a-box.sh --self-test
 ```
 
 安装后打开控制台：
@@ -150,7 +150,7 @@ sb
 
 ## 🌐 English
 
-**A-BOX** is a one-click Linux network gateway automation toolkit. It combines service deployment, system tuning, traffic control, access management, health checks, parameter export, network quality testing, and bilingual UI into a single script.
+**A-Box** is a one-click Linux network gateway automation toolkit. It combines service deployment, system tuning, traffic control, access management, health checks, parameter export, network quality testing, and bilingual UI into a single script.
 
 > ⚠️ Compliance & Disclaimer: This project is positioned as an automated tool for network architecture testing, cybersecurity research, and personal privacy protection.
 > 1. Legal Compliance: It is strictly prohibited to use the scripts and technologies provided by this project for any activities that violate the laws and regulations of your country or region. Users must ensure their actions comply with local telecommunications, cybersecurity, and internet service regulations.
@@ -161,26 +161,26 @@ sb
 ### Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh > A-BOX.sh && sudo bash A-BOX.sh
+curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > a-box.sh && sudo bash a-box.sh
 ```
 
 Mirror:
 
 ```bash
-curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh > A-BOX.sh && sudo bash A-BOX.sh
+curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > a-box.sh && sudo bash a-box.sh
 ```
 
 Language:
 
 ```bash
-sudo bash A-BOX.sh --lang zh
-sudo bash A-BOX.sh --lang en
+sudo bash a-box.sh --lang zh
+sudo bash a-box.sh --lang en
 ```
 
 Self-test:
 
 ```bash
-sudo bash A-BOX.sh --self-test
+sudo bash a-box.sh --self-test
 ```
 
 Launcher after installation:
