@@ -18,10 +18,122 @@ SCRIPT_URL='https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh'
 AIO_DIR='/etc/ddr'
 AIO_ENV='/etc/ddr/.env'
 LOCK_FILE='/var/run/aio_box.lock'
+LANG_FILE='/etc/ddr/.lang'
+PUBLIC_IP_CACHE='/etc/ddr/.public_ip.cache'
+PUBLIC_IP_CACHE_TTL=600
+AIO_LANG='zh'
 
 msg() { echo -e "$*"; }
 die() { echo -e "${RED}[!] $*${NC}" >&2; exit 1; }
-pause_return() { read -r -ep "按回车返回 / Press Enter to return..." _ || true; }
+
+normalize_lang() {
+    case "${1:-}" in
+        en|en_US|en-US|english|English) printf 'en' ;;
+        zh|zh_CN|zh-CN|cn|CN|中文|'') printf 'zh' ;;
+        *) printf 'zh' ;;
+    esac
+}
+
+tr_msg() {
+    local key="$1"
+    case "${AIO_LANG:-zh}:$key" in
+        zh:press_return) echo '按回车返回...' ;;
+        en:press_return) echo 'Press Enter to return...' ;;
+        zh:select_prompt) echo '请选择 / Select' ;;
+        en:select_prompt) echo 'Select' ;;
+        zh:main_command) echo '请求下发执行代号: ' ;;
+        en:main_command) echo 'Input command: ' ;;
+        zh:lang_title) echo '语言设置 / Language' ;;
+        en:lang_title) echo 'Language Settings / 语言设置' ;;
+        zh:lang_saved) echo '语言已保存。' ;;
+        en:lang_saved) echo 'Language saved.' ;;
+        zh:yes_no_default_no) echo '[y/N]' ;;
+        en:yes_no_default_no) echo '[y/N]' ;;
+        zh:yes_no_default_yes) echo '[Y/n]' ;;
+        en:yes_no_default_yes) echo '[Y/n]' ;;
+        zh:reality_sni_prompt) echo '   [%s] 请输入伪装 SNI (端口 %s，回车默认: %s): ' ;;
+        en:reality_sni_prompt) echo '   [%s] Enter camouflage SNI (port %s, default: %s): ' ;;
+        zh:bad_sni) echo 'SNI 格式非法: %s' ;;
+        en:bad_sni) echo 'Invalid SNI format: %s' ;;
+        zh:apple_non443_warn) echo '检测到非 443 端口使用 Apple/iCloud 类 SNI：%s。Xray-core 对 apple/icloud target 与非443端口有风险警告，此组合可能提高 IP 封禁概率。' ;;
+        en:apple_non443_warn) echo 'Apple/iCloud-like SNI on non-443 port detected: %s. Xray-core warns about apple/icloud targets and non-443 listening ports; this combination may increase IP blocking risk.' ;;
+        zh:continue_or_reset) echo '继续使用此 SNI？输入 y 继续，其他任意键重新输入 %s: ' ;;
+        en:continue_or_reset) echo 'Continue with this SNI? Type y to continue, anything else to re-enter %s: ' ;;
+        zh:port_prompt) echo '   [%s] 请输入监听端口 (回车默认: %s): ' ;;
+        en:port_prompt) echo '   [%s] Enter listen port (default: %s): ' ;;
+        zh:ss_port_prompt) echo '   [SS-2022] 请输入回程监听端口(TCP/UDP) (回车默认: %s): ' ;;
+        en:ss_port_prompt) echo '   [SS-2022] Enter relay listen port (TCP/UDP, default: %s): ' ;;
+        zh:bad_port) echo '端口非法: %s' ;;
+        en:bad_port) echo 'Invalid port: %s' ;;
+        zh:toolbox_title) echo '综合工具箱 / Toolbox' ;;
+        en:toolbox_title) echo 'Toolbox / 综合工具箱' ;;
+        zh:confirm_remote) echo '即将远程执行第三方脚本：%s。确认执行？[y/N]: ' ;;
+        en:confirm_remote) echo 'About to run third-party remote script: %s. Continue? [y/N]: ' ;;
+        zh:swap_exists) echo '检测到 /swapfile 已存在，跳过创建。' ;;
+        en:swap_exists) echo '/swapfile already exists; creation skipped.' ;;
+        zh:swap_done) echo 'Swap 处理完成。' ;;
+        en:swap_done) echo 'Swap operation completed.' ;;
+        *) echo "$key" ;;
+    esac
+}
+
+tprintf() { local key="$1"; shift; printf "$(tr_msg "$key")" "$@"; }
+
+pause_return() { read -r -ep "$(tr_msg press_return)" _ || true; }
+
+is_yes() { [[ "${1:-}" =~ ^[Yy]$ ]]; }
+
+confirm_yes_no() {
+    local prompt="$1" answer
+    read -r -ep "$prompt" answer
+    is_yes "$answer"
+}
+
+detect_lang() {
+    if [[ -n "${AIO_LANG_OVERRIDE:-}" ]]; then
+        AIO_LANG=$(normalize_lang "$AIO_LANG_OVERRIDE")
+    elif [[ -n "${AIO_LANG:-}" && "${AIO_LANG:-}" != 'zh' ]]; then
+        AIO_LANG=$(normalize_lang "$AIO_LANG")
+    elif [[ -r "$LANG_FILE" ]]; then
+        AIO_LANG=$(normalize_lang "$(tr -d '[:space:]' < "$LANG_FILE" 2>/dev/null)")
+    else
+        AIO_LANG='zh'
+    fi
+}
+
+save_lang() {
+    mkdir -p "$AIO_DIR"
+    printf '%s\n' "${AIO_LANG:-zh}" > "$LANG_FILE"
+    chmod 600 "$LANG_FILE" 2>/dev/null || true
+}
+
+initial_language_select() {
+    [[ -f "$LANG_FILE" || -n "${AIO_LANG_OVERRIDE:-}" ]] && return 0
+    local c
+    echo 'Language / 语言'
+    echo '1. 中文'
+    echo '2. English'
+    read -r -ep 'Select [1-2, default 1]: ' c || true
+    case "$c" in 2) AIO_LANG='en' ;; *) AIO_LANG='zh' ;; esac
+    save_lang
+}
+
+language_menu() {
+    clear
+    msg "${CYAN}======================================================================${NC}"
+    msg "${BOLD}${GREEN}$(tr_msg lang_title)${NC}"
+    msg "${CYAN}======================================================================${NC}"
+    msg "${YELLOW}1. 中文${NC}"
+    msg "${YELLOW}2. English${NC}"
+    msg "${GREEN}0. 返回 / Back${NC}"
+    local c
+    read -r -ep 'Select [0-2]: ' c
+    case "$c" in
+        1) AIO_LANG='zh'; save_lang; msg "${GREEN}$(tr_msg lang_saved)${NC}"; pause_return ;;
+        2) AIO_LANG='en'; save_lang; msg "${GREEN}$(tr_msg lang_saved)${NC}"; pause_return ;;
+        *) return 0 ;;
+    esac
+}
 
 need_interactive_tty() {
     if [[ ! -t 0 ]]; then
@@ -59,6 +171,40 @@ valid_domain() {
 }
 
 valid_sni() { valid_domain "$1"; }
+
+is_apple_like_sni() {
+    local sni="${1,,}"
+    [[ "$sni" == 'apple.com' || "$sni" == *.apple.com || "$sni" == 'icloud.com' || "$sni" == *.icloud.com ]]
+}
+
+default_sni_for_port() {
+    local port="${1:-443}"
+    if [[ "$port" == '443' ]]; then
+        printf 'www.apple.com'
+    else
+        printf 'www.microsoft.com'
+    fi
+}
+
+prompt_reality_sni() {
+    local label="$1" port="$2" default_sni input answer prompt
+    default_sni=$(default_sni_for_port "$port")
+    while true; do
+        printf -v prompt "$(tr_msg reality_sni_prompt)" "$label" "$port" "$default_sni"
+        read -r -ep "$prompt" input
+        input=${input:-$default_sni}
+        valid_sni "$input" || die "$(printf "$(tr_msg bad_sni)" "$input")"
+        if [[ "$port" != '443' ]] && is_apple_like_sni "$input"; then
+            msg "${YELLOW}[!] $(printf "$(tr_msg apple_non443_warn)" "$input")${NC}"
+            printf -v prompt "$(tr_msg continue_or_reset)" "$label"
+            read -r -ep "$prompt" answer
+            is_yes "$answer" && { printf '%s\n' "$input"; return 0; }
+            continue
+        fi
+        printf '%s\n' "$input"
+        return 0
+    done
+}
 
 valid_url_https() {
     local url="${1:-}" rest host port
@@ -145,23 +291,79 @@ pin_sha256_colon() {
     openssl x509 -noout -fingerprint -sha256 -in "$1" | cut -d= -f2
 }
 
-get_public_ip() {
+get_public_ip_fresh() {
     local ip api
     for api in 'https://api.ipify.org' 'https://ifconfig.me/ip' 'https://icanhazip.com'; do
-        ip=$(curl -s4m5 "$api" 2>/dev/null | tr -d '[:space:]')
+        ip=$(curl -fsS4 --connect-timeout 1 -m 2 "$api" 2>/dev/null | tr -d '[:space:]')
         if valid_ipv4_cidr "$ip"; then
             printf '%s\n' "$ip"
             return 0
         fi
     done
-    ip=$(curl -s6m5 'https://api64.ipify.org' 2>/dev/null | tr -d '[:space:]')
+    ip=$(curl -fsS6 --connect-timeout 1 -m 2 'https://api64.ipify.org' 2>/dev/null | tr -d '[:space:]')
     if valid_ipv6_cidr "$ip"; then
         printf '%s\n' "$ip"
         return 0
     fi
     printf 'N/A\n'
+    return 1
 }
 
+cache_public_ip() {
+    local ip="$1"
+    [[ -n "$ip" && "$ip" != 'N/A' ]] || return 0
+    mkdir -p "$AIO_DIR" 2>/dev/null || true
+    printf '%s\n' "$ip" > "$PUBLIC_IP_CACHE" 2>/dev/null || true
+    chmod 600 "$PUBLIC_IP_CACHE" 2>/dev/null || true
+}
+
+read_cached_public_ip() {
+    local ip now mtime age
+    [[ -r "$PUBLIC_IP_CACHE" ]] || return 1
+    ip=$(head -n 1 "$PUBLIC_IP_CACHE" 2>/dev/null | tr -d '[:space:]')
+    if ! valid_ipv4_cidr "$ip" && ! valid_ipv6_cidr "$ip"; then
+        return 1
+    fi
+    now=$(date +%s)
+    mtime=$(stat -c %Y "$PUBLIC_IP_CACHE" 2>/dev/null || echo 0)
+    age=$(( now - mtime ))
+    (( age >= 0 && age <= PUBLIC_IP_CACHE_TTL )) || return 1
+    printf '%s\n' "$ip"
+}
+
+get_public_ip() {
+    local ip
+    ip=$(read_cached_public_ip 2>/dev/null || true)
+    if [[ -n "$ip" ]]; then
+        printf '%s\n' "$ip"
+        return 0
+    fi
+    ip=$(get_public_ip_fresh || true)
+    if [[ -n "$ip" && "$ip" != 'N/A' ]]; then
+        cache_public_ip "$ip"
+        printf '%s\n' "$ip"
+        return 0
+    fi
+    if [[ -r "$PUBLIC_IP_CACHE" ]]; then
+        ip=$(head -n 1 "$PUBLIC_IP_CACHE" 2>/dev/null | tr -d '[:space:]')
+        if valid_ipv4_cidr "$ip" || valid_ipv6_cidr "$ip"; then
+            printf '%s\n' "$ip"
+            return 0
+        fi
+    fi
+    printf 'N/A\n'
+}
+
+refresh_public_ip() {
+    local ip
+    ip=$(get_public_ip_fresh || true)
+    if [[ -n "$ip" && "$ip" != 'N/A' ]]; then
+        cache_public_ip "$ip"
+        printf '%s\n' "$ip"
+        return 0
+    fi
+    get_public_ip
+}
 get_active_interface() {
     local iface
     iface=$(ip route get 8.8.8.8 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')
@@ -178,7 +380,7 @@ verify_domain_points_to_self() {
         msg "${YELLOW}[!] 域名已解析，但未发现解析到当前公网 IP: $pub_ip${NC}"
         msg "${YELLOW}解析结果:${NC}\n$resolved"
         read -r -ep '仍然继续？[y/N]: ' continue_domain
-        [[ "$continue_domain" =~ ^[Yy]$ ]] || die '已取消部署。'
+        is_yes "$continue_domain" || die '已取消部署。'
     fi
 }
 
@@ -186,6 +388,7 @@ init_system_environment() {
     release=''
     installType=''
     removeType=''
+    deps_initialized=0
     if [[ -f /etc/os-release ]]; then
         . /etc/os-release
         case "${ID:-}" in
@@ -242,6 +445,7 @@ init_system_environment() {
         esac
         ${installType} "${deps[@]}" >/dev/null 2>&1 || die '基础依赖包安装失败。'
         mkdir -p "$AIO_DIR" && touch "$DEPS_MARKER"
+        deps_initialized=1
     fi
 
     ensure_commands
@@ -252,21 +456,23 @@ init_system_environment() {
         systemctl enable --now "$unit" >/dev/null 2>&1 || true
     }
 
-    if [[ "$INIT_SYS" == 'systemd' ]]; then
-        case "$release" in
-            debian|ubuntu) start_unit_if_exists cron ;;
-            centos) start_unit_if_exists crond ;;
-        esac
-        start_unit_if_exists vnstat
-        if [[ "$release" == 'centos' ]]; then
-            systemctl disable --now firewalld 2>/dev/null || true
-            systemctl enable --now iptables ip6tables 2>/dev/null || true
+    if [[ "$deps_initialized" == '1' ]]; then
+        if [[ "$INIT_SYS" == 'systemd' ]]; then
+            case "$release" in
+                debian|ubuntu) start_unit_if_exists cron ;;
+                centos) start_unit_if_exists crond ;;
+            esac
+            start_unit_if_exists vnstat
+            if [[ "$release" == 'centos' ]]; then
+                systemctl disable --now firewalld 2>/dev/null || true
+                systemctl enable --now iptables ip6tables 2>/dev/null || true
+            fi
+        else
+            rc-update add crond default 2>/dev/null || true
+            rc-update add vnstatd default 2>/dev/null || true
+            rc-service crond start 2>/dev/null || true
+            rc-service vnstatd start 2>/dev/null || true
         fi
-    else
-        rc-update add crond default 2>/dev/null || true
-        rc-update add vnstatd default 2>/dev/null || true
-        rc-service crond start 2>/dev/null || true
-        rc-service vnstatd start 2>/dev/null || true
     fi
 
     IPT=$(command -v iptables || echo '/sbin/iptables')
@@ -393,6 +599,23 @@ is_service_running() {
     fi
 }
 
+
+build_status_str() {
+    local status_str='' statuses status
+    if [[ "${INIT_SYS:-}" == 'systemd' ]] && command -v systemctl >/dev/null 2>&1; then
+        mapfile -t statuses < <(systemctl is-active xray sing-box hysteria 2>/dev/null || true)
+        [[ "${statuses[0]:-}" == 'active' ]] && status_str+="${GREEN}Xray-Core${NC} "
+        [[ "${statuses[1]:-}" == 'active' ]] && status_str+="${CYAN}Sing-Box${NC} "
+        [[ "${statuses[2]:-}" == 'active' ]] && status_str+="${GREEN}Hy2(Native)${NC} "
+    elif [[ "${INIT_SYS:-}" == 'openrc' ]]; then
+        rc-service xray status >/dev/null 2>&1 && status_str+="${GREEN}Xray-Core${NC} "
+        rc-service sing-box status >/dev/null 2>&1 && status_str+="${CYAN}Sing-Box${NC} "
+        rc-service hysteria status >/dev/null 2>&1 && status_str+="${GREEN}Hy2(Native)${NC} "
+    fi
+    [[ -z "$status_str" ]] && status_str="${RED}Stack Stopped${NC}"
+    printf '%b' "$status_str"
+}
+
 save_firewall_rules() {
     command -v netfilter-persistent >/dev/null 2>&1 && netfilter-persistent save >/dev/null 2>&1 || true
     command -v rc-service >/dev/null 2>&1 && rc-service iptables save >/dev/null 2>&1 || true
@@ -461,6 +684,7 @@ selected_port_pairs() {
     add_port_pair pairs tcp "${VLESS_PORT:-}"
     add_port_pair pairs tcp "${XHTTP_PORT:-}"
     add_port_pair pairs tcp "${SS_PORT:-}"
+    add_port_pair pairs udp "${SS_PORT:-}"
     add_port_pair pairs udp "${HY2_BASE_PORT:-}"
     printf '%s' "$pairs"
 }
@@ -522,23 +746,37 @@ release_ports() {
     done
 }
 
+write_if_changed() {
+    local target="$1" tmp="$2"
+    if [[ -f "$target" ]] && cmp -s "$tmp" "$target"; then
+        rm -f "$tmp"
+    else
+        mv -f "$tmp" "$target"
+    fi
+}
+
 setup_shortcut() {
     mkdir -p "$AIO_DIR"
     if [[ "${1:-}" == 'update' ]]; then
         curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o /tmp/aio.sh.tmp || die '快捷入口脚本下载失败。'
         bash -n /tmp/aio.sh.tmp || die '更新脚本语法校验失败。'
         grep -q '==============================Aio-box===============================' /tmp/aio.sh.tmp || die '更新脚本文本指纹不匹配。'
-        mv -f /tmp/aio.sh.tmp "$AIO_DIR/aio.sh"
+        write_if_changed "$AIO_DIR/aio.sh" /tmp/aio.sh.tmp
     elif [[ -f "$0" && -r "$0" && "$0" != 'bash' && "$0" != '-bash' ]]; then
-        cp -f "$0" "$AIO_DIR/aio.sh"
+        if [[ ! -f "$AIO_DIR/aio.sh" ]] || ! cmp -s "$0" "$AIO_DIR/aio.sh"; then
+            cp -f "$0" "$AIO_DIR/aio.sh"
+        fi
     elif [[ ! -f "$AIO_DIR/aio.sh" ]]; then
         curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o /tmp/aio.sh.tmp || die '无法从远端创建持久化入口。'
         bash -n /tmp/aio.sh.tmp || die '持久化脚本语法校验失败。'
         grep -q '==============================Aio-box===============================' /tmp/aio.sh.tmp || die '持久化脚本文本指纹不匹配。'
-        mv -f /tmp/aio.sh.tmp "$AIO_DIR/aio.sh"
+        write_if_changed "$AIO_DIR/aio.sh" /tmp/aio.sh.tmp
     fi
     chmod +x "$AIO_DIR/aio.sh"
-    cat > /usr/local/bin/sb <<'EOS'
+
+    local shortcut_tmp
+    shortcut_tmp=$(mktemp /tmp/aio-sb.XXXXXX) || die '快捷入口临时文件创建失败。'
+    cat > "$shortcut_tmp" <<'EOS'
 #!/usr/bin/env bash
 if [[ $EUID -eq 0 ]]; then
     exec bash /etc/ddr/aio.sh "$@"
@@ -549,9 +787,10 @@ else
     exit 1
 fi
 EOS
+    chmod +x "$shortcut_tmp"
+    write_if_changed /usr/local/bin/sb "$shortcut_tmp"
     chmod +x /usr/local/bin/sb
 }
-
 validate_downloaded_asset() {
     local f="/tmp/$1"
     [[ -s "$f" ]] || die "下载资产为空: $1"
@@ -641,7 +880,7 @@ fetch_geo_data() {
 }
 
 reset_protocol_vars() {
-    unset UUID VLESS_SNI VLESS_PORT XHTTP_PORT HY2_BASE_PORT HY2_DOMAIN HY2_UP HY2_DOWN HY2_MASQ_URL
+    unset UUID VLESS_SNI VISION_SNI XHTTP_SNI VLESS_PORT XHTTP_PORT HY2_BASE_PORT HY2_DOMAIN HY2_UP HY2_DOWN HY2_MASQ_URL
     unset SS_PORT SS_WHITELIST_IP PUBLIC_KEY PBK SHORT_ID HY2_PASS HY2_OBFS SS_PASS
     unset HY2_CERT_SHA256_FP HY2_CERT_PUBKEY_SHA256_B64 HY2_HOP HY2_HOP_IMPL HY2_MONITOR_PORT
     unset HY2_URI_PORTS HY2_CLASH_PORTS HY2_SB_PORTS HY2_RANGE_START HY2_RANGE_END ENABLE_KEEPALIVE
@@ -659,6 +898,8 @@ write_env() {
         printf 'MODE=%s\n' "$(shell_quote "$env_mode")"
         printf 'UUID=%s\n' "$(shell_quote "${UUID:-}")"
         printf 'VLESS_SNI=%s\n' "$(shell_quote "${VLESS_SNI:-}")"
+        printf 'VISION_SNI=%s\n' "$(shell_quote "${VISION_SNI:-}")"
+        printf 'XHTTP_SNI=%s\n' "$(shell_quote "${XHTTP_SNI:-}")"
         printf 'VLESS_PORT=%s\n' "$(shell_quote "${VLESS_PORT:-}")"
         printf 'XHTTP_PORT=%s\n' "$(shell_quote "${XHTTP_PORT:-}")"
         printf 'HY2_BASE_PORT=%s\n' "$(shell_quote "${HY2_BASE_PORT:-}")"
@@ -882,49 +1123,63 @@ EOF_GEO
 pre_install_setup() {
     local CORE_IN=$1 MODE_IN=$2
     reset_protocol_vars
-    local AUTO_SNI='www.samsung.com'
-    local DEF_V_PORT=443 DEF_X_PORT=8443 DEF_H_PORT=443 DEF_S_PORT=24043
-    local INPUT_V_SNI INPUT_V_PORT INPUT_X_PORT INPUT_H_PORT INPUT_H_DOMAIN INPUT_H_HOP INPUT_H_DOWN INPUT_H_UP INPUT_H_MASQ INPUT_S_PORT INPUT_SS_WL INPUT_KA ip
+    local DEF_V_PORT=443 DEF_X_PORT=8443 DEF_H_PORT=443 DEF_S_PORT=2053
+    local INPUT_V_PORT INPUT_X_PORT INPUT_H_PORT INPUT_H_DOMAIN INPUT_H_HOP INPUT_H_DOWN INPUT_H_UP INPUT_H_MASQ INPUT_S_PORT INPUT_SS_WL INPUT_KA ip prompt
 
     # Xray ALL: TCP 443 for VLESS-Vision, TCP 8443 for VLESS-XHTTP, UDP 443 for HY2.
-    # TCP/UDP can share the same numeric port; no need to move VLESS away from 443.
+    # TCP/UDP can share the same numeric port; SS-2022 listens on TCP/UDP 2053 by default.
 
     INGRESS_IF=$(get_active_interface)
     [[ -z "$INGRESS_IF" ]] && die '无法识别公网入接口。'
+    GLOBAL_PUBLIC_IP=$(refresh_public_ip)
 
     msg "\n${CYAN}======================================================================${NC}"
-    msg "${BOLD}参数构造向导 [Engine: $CORE_IN | Mode: $MODE_IN]${NC}"
+    if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        msg "${BOLD}Parameter Wizard [Engine: $CORE_IN | Mode: $MODE_IN]${NC}"
+    else
+        msg "${BOLD}参数构造向导 [Engine: $CORE_IN | Mode: $MODE_IN]${NC}"
+    fi
     msg "${BLUE}----------------------------------------------------------------------${NC}"
 
-    if [[ "$MODE_IN" == *'VISION'* || "$MODE_IN" == *'XHTTP'* || "$MODE_IN" == *'ALL'* || "$MODE_IN" == 'VLESS_SS' ]]; then
-        read -r -ep "   [REALITY] 请输入伪装 SNI (回车默认: $AUTO_SNI): " INPUT_V_SNI
-        VLESS_SNI=${INPUT_V_SNI:-$AUTO_SNI}
-        valid_sni "$VLESS_SNI" || die "SNI 格式非法: $VLESS_SNI"
-    fi
     if [[ "$MODE_IN" == *'VISION'* || "$MODE_IN" == *'ALL'* || "$MODE_IN" == 'VLESS_SS' ]]; then
-        read -r -ep "   [VLESS-Vision] 请输入监听端口 (回车默认: $DEF_V_PORT): " INPUT_V_PORT
+        printf -v prompt "$(tr_msg port_prompt)" 'VLESS-Vision' "$DEF_V_PORT"
+        read -r -ep "$prompt" INPUT_V_PORT
         VLESS_PORT=${INPUT_V_PORT:-$DEF_V_PORT}
-        valid_port "$VLESS_PORT" || die "端口非法: $VLESS_PORT"
+        valid_port "$VLESS_PORT" || die "$(printf "$(tr_msg bad_port)" "$VLESS_PORT")"
+        VISION_SNI=$(prompt_reality_sni 'VLESS-Vision' "$VLESS_PORT")
     fi
     if [[ "$MODE_IN" == *'XHTTP'* || "$MODE_IN" == *'ALL'* ]]; then
-        read -r -ep "   [VLESS-XHTTP] 请输入监听端口 (回车默认: $DEF_X_PORT): " INPUT_X_PORT
+        printf -v prompt "$(tr_msg port_prompt)" 'VLESS-XHTTP' "$DEF_X_PORT"
+        read -r -ep "$prompt" INPUT_X_PORT
         XHTTP_PORT=${INPUT_X_PORT:-$DEF_X_PORT}
-        valid_port "$XHTTP_PORT" || die "端口非法: $XHTTP_PORT"
+        valid_port "$XHTTP_PORT" || die "$(printf "$(tr_msg bad_port)" "$XHTTP_PORT")"
+        XHTTP_SNI=$(prompt_reality_sni 'VLESS-XHTTP' "$XHTTP_PORT")
     fi
-    if [[ "$MODE_IN" == *'HY2'* || "$MODE_IN" == *'ALL'* ]]; then
-        read -r -ep "   [HY2] 请输入主监听端口 (回车默认: $DEF_H_PORT): " INPUT_H_PORT
-        HY2_BASE_PORT=${INPUT_H_PORT:-$DEF_H_PORT}
-        valid_port "$HY2_BASE_PORT" || die "端口非法: $HY2_BASE_PORT"
+    VLESS_SNI=${VISION_SNI:-${XHTTP_SNI:-www.microsoft.com}}
 
-        read -r -ep '   [HY2] 是否拥有已解析到本机的域名？(留空使用默认自签证书): ' INPUT_H_DOMAIN
+    if [[ "$MODE_IN" == *'HY2'* || "$MODE_IN" == *'ALL'* ]]; then
+        printf -v prompt "$(tr_msg port_prompt)" 'HY2' "$DEF_H_PORT"
+        read -r -ep "$prompt" INPUT_H_PORT
+        HY2_BASE_PORT=${INPUT_H_PORT:-$DEF_H_PORT}
+        valid_port "$HY2_BASE_PORT" || die "$(printf "$(tr_msg bad_port)" "$HY2_BASE_PORT")"
+
+        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+            read -r -ep '   [HY2] Do you have a domain already resolved to this server? (empty = self-signed certificate): ' INPUT_H_DOMAIN
+        else
+            read -r -ep '   [HY2] 是否拥有已解析到本机的域名？(留空使用默认自签证书): ' INPUT_H_DOMAIN
+        fi
         HY2_DOMAIN="$INPUT_H_DOMAIN"
         if [[ -n "$HY2_DOMAIN" ]]; then
-            valid_domain "$HY2_DOMAIN" || die "域名格式非法: $HY2_DOMAIN"
+            valid_domain "$HY2_DOMAIN" || die "域名格式非法 / Invalid domain: $HY2_DOMAIN"
             [[ "${GLOBAL_PUBLIC_IP:-N/A}" != 'N/A' ]] && verify_domain_points_to_self "$HY2_DOMAIN" "$GLOBAL_PUBLIC_IP"
         fi
 
-        read -r -ep '   [HY2] 是否开启端口跳跃 (单端口被限速环境建议开启)? [y/N]: ' INPUT_H_HOP
-        if [[ "$INPUT_H_HOP" =~ ^[Yy]$ ]]; then
+        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+            read -r -ep '   [HY2] Enable port hopping? [y/N]: ' INPUT_H_HOP
+        else
+            read -r -ep '   [HY2] 是否开启端口跳跃 (单端口被限速环境建议开启)? [y/N]: ' INPUT_H_HOP
+        fi
+        if is_yes "$INPUT_H_HOP"; then
             HY2_HOP='true'
             HY2_RANGE_START=20000
             HY2_RANGE_END=25000
@@ -948,22 +1203,40 @@ pre_install_setup() {
             HY2_MONITOR_PORT="$HY2_BASE_PORT"
         fi
 
-        read -r -ep '   [HY2] 下行速率(Mbps) (回车默认: 1000): ' INPUT_H_DOWN
+        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+            read -r -ep '   [HY2] Downlink Mbps (default: 1000): ' INPUT_H_DOWN
+        else
+            read -r -ep '   [HY2] 下行速率(Mbps) (回车默认: 1000): ' INPUT_H_DOWN
+        fi
         HY2_DOWN=${INPUT_H_DOWN:-1000}
-        valid_positive_int "$HY2_DOWN" || die "速率非法: $HY2_DOWN"
-        read -r -ep '   [HY2] 上行速率(Mbps) (回车默认: 100): ' INPUT_H_UP
+        valid_positive_int "$HY2_DOWN" || die "速率非法 / Invalid rate: $HY2_DOWN"
+        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+            read -r -ep '   [HY2] Uplink Mbps (default: 100): ' INPUT_H_UP
+        else
+            read -r -ep '   [HY2] 上行速率(Mbps) (回车默认: 100): ' INPUT_H_UP
+        fi
         HY2_UP=${INPUT_H_UP:-100}
-        valid_positive_int "$HY2_UP" || die "速率非法: $HY2_UP"
+        valid_positive_int "$HY2_UP" || die "速率非法 / Invalid rate: $HY2_UP"
 
-        read -r -ep '   [HY2] 请输入 HTTP/3 伪装站点 URL (回车默认使用 VLESS SNI 或 https://www.samsung.com/): ' INPUT_H_MASQ
-        HY2_MASQ_URL=${INPUT_H_MASQ:-"https://${VLESS_SNI:-www.samsung.com}/"}
-        valid_url_https "$HY2_MASQ_URL" || die "HY2 伪装 URL 非法: $HY2_MASQ_URL"
+        local masq_default="https://${VISION_SNI:-${XHTTP_SNI:-www.samsung.com}}/"
+        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+            read -r -ep "   [HY2] Enter HTTP/3 masquerade URL (default: $masq_default): " INPUT_H_MASQ
+        else
+            read -r -ep "   [HY2] 请输入 HTTP/3 伪装站点 URL (回车默认: $masq_default): " INPUT_H_MASQ
+        fi
+        HY2_MASQ_URL=${INPUT_H_MASQ:-$masq_default}
+        valid_url_https "$HY2_MASQ_URL" || die "HY2 伪装 URL 非法 / Invalid HY2 masquerade URL: $HY2_MASQ_URL"
     fi
     if [[ "$MODE_IN" == *'SS'* || "$MODE_IN" == *'ALL'* || "$MODE_IN" == 'VLESS_SS' ]]; then
-        read -r -ep "   [SS-2022] 请输入回程监听端口(仅TCP) (回车默认: $DEF_S_PORT): " INPUT_S_PORT
+        printf -v prompt "$(tr_msg ss_port_prompt)" "$DEF_S_PORT"
+        read -r -ep "$prompt" INPUT_S_PORT
         SS_PORT=${INPUT_S_PORT:-$DEF_S_PORT}
-        valid_port "$SS_PORT" || die "端口非法: $SS_PORT"
-        read -r -ep '   [SS-2022] 请输入前置机白名单 IP/CIDR (留空全网开放, 多个用空格分隔): ' INPUT_SS_WL
+        valid_port "$SS_PORT" || die "$(printf "$(tr_msg bad_port)" "$SS_PORT")"
+        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+            read -r -ep '   [SS-2022] Enter frontend whitelist IP/CIDR (empty = open to all, space-separated): ' INPUT_SS_WL
+        else
+            read -r -ep '   [SS-2022] 请输入前置机白名单 IP/CIDR (留空全网开放, 多个用空格分隔): ' INPUT_SS_WL
+        fi
         SS_WHITELIST_IP="$INPUT_SS_WL"
         if [[ -n "$SS_WHITELIST_IP" ]]; then
             for ip in $SS_WHITELIST_IP; do
@@ -976,8 +1249,12 @@ pre_install_setup() {
         fi
     fi
 
-    read -r -ep '   [全局] 是否开启 连接保持 TCP KeepAlive (45s) 防治 NAT 空闲断连? [y/N]: ' INPUT_KA
-    [[ "$INPUT_KA" =~ ^[Yy]$ ]] && ENABLE_KEEPALIVE='true' || ENABLE_KEEPALIVE='false'
+    if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        read -r -ep '   [Global] Enable TCP KeepAlive 45s to prevent NAT idle disconnect? [y/N]: ' INPUT_KA
+    else
+        read -r -ep '   [全局] 是否开启 TCP KeepAlive (45s) 防治 NAT 空闲断连? [y/N]: ' INPUT_KA
+    fi
+    is_yes "$INPUT_KA" && ENABLE_KEEPALIVE='true' || ENABLE_KEEPALIVE='false'
     msg "${CYAN}======================================================================${NC}\n"
 
     check_selected_ports_free
@@ -998,28 +1275,33 @@ pre_install_setup() {
     if [[ "$MODE_IN" == *'SS'* || "$MODE_IN" == *'ALL'* || "$MODE_IN" == 'VLESS_SS' ]]; then
         if [[ -n "${SS_WHITELIST_IP:-}" ]]; then
             for ip in $SS_WHITELIST_IP; do
-                if [[ "$ip" == *:* ]]; then
-                    if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
-                        if ! $IPT6 -w -C INPUT -p tcp --dport "$SS_PORT" -s "$ip" -j ACCEPT 2>/dev/null; then
-                            $IPT6 -w -I INPUT -p tcp --dport "$SS_PORT" -s "$ip" -m comment --comment "Aio-box-${SS_PORT}-tcp-WL6" -j ACCEPT >/dev/null 2>&1 || die "IPv6 白名单规则写入失败: $ip"
+                for proto in tcp udp; do
+                    if [[ "$ip" == *:* ]]; then
+                        if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
+                            if ! $IPT6 -w -C INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -j ACCEPT 2>/dev/null; then
+                                $IPT6 -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -m comment --comment "Aio-box-${SS_PORT}-${proto}-WL6" -j ACCEPT >/dev/null 2>&1 || die "IPv6 白名单规则写入失败: $ip/$proto"
+                            fi
+                        fi
+                    else
+                        if ! $IPT -w -C INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -j ACCEPT 2>/dev/null; then
+                            $IPT -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -m comment --comment "Aio-box-${SS_PORT}-${proto}-WL" -j ACCEPT >/dev/null 2>&1 || die "IPv4 白名单规则写入失败: $ip/$proto"
                         fi
                     fi
-                else
-                    if ! $IPT -w -C INPUT -p tcp --dport "$SS_PORT" -s "$ip" -j ACCEPT 2>/dev/null; then
-                        $IPT -w -I INPUT -p tcp --dport "$SS_PORT" -s "$ip" -m comment --comment "Aio-box-${SS_PORT}-tcp-WL" -j ACCEPT >/dev/null 2>&1 || die "IPv4 白名单规则写入失败: $ip"
+                done
+            done
+            for proto in tcp udp; do
+                if ! $IPT -w -C INPUT -p "$proto" --dport "$SS_PORT" -j DROP 2>/dev/null; then
+                    $IPT -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-${proto}-DROP" -j DROP >/dev/null 2>&1 || die "IPv4 SS DROP 规则写入失败: $proto"
+                fi
+                if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
+                    if ! $IPT6 -w -C INPUT -p "$proto" --dport "$SS_PORT" -j DROP 2>/dev/null; then
+                        $IPT6 -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-${proto}-DROP6" -j DROP >/dev/null 2>&1 || die "IPv6 SS DROP 规则写入失败: $proto"
                     fi
                 fi
             done
-            if ! $IPT -w -C INPUT -p tcp --dport "$SS_PORT" -j DROP 2>/dev/null; then
-                $IPT -w -A INPUT -p tcp --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-tcp-DROP" -j DROP >/dev/null 2>&1 || die 'IPv4 SS DROP 规则写入失败。'
-            fi
-            if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
-                if ! $IPT6 -w -C INPUT -p tcp --dport "$SS_PORT" -j DROP 2>/dev/null; then
-                    $IPT6 -w -A INPUT -p tcp --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-tcp-DROP6" -j DROP >/dev/null 2>&1 || die 'IPv6 SS DROP 规则写入失败。'
-                fi
-            fi
         else
             allowPort "$SS_PORT" tcp
+            allowPort "$SS_PORT" udp
         fi
     fi
     save_firewall_rules
@@ -1039,12 +1321,13 @@ build_xray_config() {
     inbounds_json=$(jq -n \
         --arg mode "$mode" \
         --arg uuid "$UUID" \
-        --arg sni "$VLESS_SNI" \
+        --arg v_sni "${VISION_SNI:-${VLESS_SNI:-www.apple.com}}" \
+        --arg x_sni "${XHTTP_SNI:-${VLESS_SNI:-www.microsoft.com}}" \
         --arg pk "$PK" \
         --arg sid "$SHORT_ID" \
         --argjson vport "${VLESS_PORT:-443}" \
         --argjson xport "${XHTTP_PORT:-8443}" \
-        --argjson ssport "${SS_PORT:-24043}" \
+        --argjson ssport "${SS_PORT:-2053}" \
         --arg ss_pass "$SS_PASS" \
         --argjson sock "$sockopt_json" '
         def maybe_sock: if $sock == null then {} else {sockopt:$sock} end;
@@ -1052,18 +1335,18 @@ build_xray_config() {
           {
             listen:"::", port:$vport, protocol:"vless",
             settings:{clients:[{id:$uuid, flow:"xtls-rprx-vision"}], decryption:"none"},
-            streamSettings:({network:"tcp", security:"reality", realitySettings:{target:($sni + ":443"), serverNames:[$sni], privateKey:$pk, shortIds:[$sid]}} + maybe_sock),
+            streamSettings:({network:"tcp", security:"reality", realitySettings:{target:($v_sni + ":443"), serverNames:[$v_sni], privateKey:$pk, shortIds:[$sid]}} + maybe_sock),
             sniffing:{enabled:true, destOverride:["http","tls","quic"]}
           };
         def xhttp:
           {
             listen:"::", port:$xport, protocol:"vless",
             settings:{clients:[{id:$uuid}], decryption:"none"},
-            streamSettings:({network:"xhttp", security:"reality", xhttpSettings:{mode:"auto", path:"/xhttp"}, realitySettings:{target:($sni + ":443"), serverNames:[$sni], privateKey:$pk, shortIds:[$sid]}} + maybe_sock),
+            streamSettings:({network:"xhttp", security:"reality", xhttpSettings:{mode:"auto", path:"/xhttp"}, realitySettings:{target:($x_sni + ":443"), serverNames:[$x_sni], privateKey:$pk, shortIds:[$sid]}} + maybe_sock),
             sniffing:{enabled:true, destOverride:["http","tls","quic"]}
           };
         def ss:
-          ({listen:"::", port:$ssport, protocol:"shadowsocks", settings:{method:"2022-blake3-aes-128-gcm", password:$ss_pass, network:"tcp"}}
+          ({listen:"::", port:$ssport, protocol:"shadowsocks", settings:{method:"2022-blake3-aes-128-gcm", password:$ss_pass, network:"tcp,udp"}}
            + (if $sock == null then {} else {streamSettings:{sockopt:$sock}} end));
         []
         | if ($mode|contains("VISION")) or ($mode|contains("ALL")) or $mode == "VLESS_SS" then . + [vision] else . end
@@ -1096,12 +1379,13 @@ build_singbox_config() {
     inbounds_json=$(jq -n \
         --arg mode "$mode" \
         --arg uuid "$UUID" \
-        --arg sni "$VLESS_SNI" \
+        --arg v_sni "${VISION_SNI:-${VLESS_SNI:-www.apple.com}}" \
+        --arg x_sni "${XHTTP_SNI:-${VLESS_SNI:-www.microsoft.com}}" \
         --arg pk "$PK" \
         --arg sid "$SHORT_ID" \
         --argjson vport "${VLESS_PORT:-443}" \
         --argjson hy2port "${HY2_BASE_PORT:-443}" \
-        --argjson ssport "${SS_PORT:-24043}" \
+        --argjson ssport "${SS_PORT:-2053}" \
         --argjson hy2up "${HY2_UP:-100}" \
         --argjson hy2down "${HY2_DOWN:-1000}" \
         --arg hy2pass "${HY2_PASS:-}" \
@@ -1114,7 +1398,7 @@ build_singbox_config() {
           ({
             type:"vless", listen:"::", listen_port:$vport, tcp_fast_open:true,
             users:[{uuid:$uuid, flow:"xtls-rprx-vision"}],
-            tls:{enabled:true, server_name:$sni, reality:{enabled:true, handshake:{server:$sni, server_port:443}, private_key:$pk, short_id:[$sid]}}
+            tls:{enabled:true, server_name:$v_sni, reality:{enabled:true, handshake:{server:$v_sni, server_port:443}, private_key:$pk, short_id:[$sid]}}
           } + $ka);
         def hy2:
           {
@@ -1127,7 +1411,7 @@ build_singbox_config() {
         def ss:
           ({
             type:"shadowsocks", listen:"::", listen_port:$ssport, tcp_fast_open:true,
-            method:"2022-blake3-aes-128-gcm", password:$ss_pass, network:"tcp"
+            method:"2022-blake3-aes-128-gcm", password:$ss_pass
           } + $ka);
         []
         | if ($mode|contains("VISION")) or ($mode|contains("ALL")) or $mode == "VLESS_SS" then . + [vision] else . end
@@ -1592,60 +1876,68 @@ manage_ss_whitelist() {
     source "$AIO_ENV" 2>/dev/null || true
     [[ -z "${SS_PORT:-}" ]] && { msg "${RED}[!] 未检测到已部署的 SS-2022 服务端口。${NC}"; pause_return; return; }
     msg "${CYAN}======================================================================${NC}"
-    msg "${BOLD}${GREEN}SS-2022 白名单 IP 管理${NC}"
+    msg "${BOLD}${GREEN}SS-2022 白名单 IP 管理 / SS-2022 Whitelist Manager${NC}"
     msg "${CYAN}======================================================================${NC}"
-    msg "${YELLOW}当前 SS-2022 监听端口: $SS_PORT${NC}"
+    msg "${YELLOW}当前 SS-2022 监听端口: $SS_PORT/TCP+UDP${NC}"
     msg "IPv4 白名单:"
-    $IPT -nL INPUT --line-numbers 2>/dev/null | grep "tcp dpt:$SS_PORT" | grep 'ACCEPT' | awk '{print $5}' | grep -v '0.0.0.0/0' || true
+    $IPT -nL INPUT --line-numbers 2>/dev/null | grep -E "(tcp|udp) dpt:$SS_PORT" | grep 'ACCEPT' | awk '{print $5}' | grep -v '0.0.0.0/0' | sort -u || true
     if command -v ip6tables >/dev/null 2>&1 && $IPT6 -nL INPUT >/dev/null 2>&1; then
         msg "IPv6 白名单:"
-        $IPT6 -nL INPUT --line-numbers 2>/dev/null | grep "tcp dpt:$SS_PORT" | grep 'ACCEPT' | awk '{print $5}' | grep -v '::/0' || true
+        $IPT6 -nL INPUT --line-numbers 2>/dev/null | grep -E "(tcp|udp) dpt:$SS_PORT" | grep 'ACCEPT' | awk '{print $5}' | grep -v '::/0' | sort -u || true
     fi
     msg "${BLUE}----------------------------------------------------------------------${NC}"
-    msg "${YELLOW}1. 新增白名单 IP${NC}"
-    msg "${YELLOW}2. 移除白名单 IP${NC}"
-    msg "${YELLOW}3. 开启白名单模式 (插入 DROP)${NC}"
-    msg "${YELLOW}4. 切换为全网开放 (移除 DROP)${NC}"
+    msg "${YELLOW}1. 新增白名单 IP/CIDR (TCP+UDP)${NC}"
+    msg "${YELLOW}2. 移除白名单 IP/CIDR (TCP+UDP)${NC}"
+    msg "${YELLOW}3. 开启白名单模式 (TCP+UDP DROP)${NC}"
+    msg "${YELLOW}4. 切换为全网开放 (移除 DROP 并放行 TCP+UDP)${NC}"
     msg "${GREEN}0. 返回主菜单${NC}"
     read -r -ep '请选择操作 [0-4]: ' wl_choice
-    local add_ip del_ip rule found
+    local add_ip del_ip rule found proto
     case "$wl_choice" in
         1)
             read -r -ep '请输入要放行的前置机 IP/CIDR: ' add_ip
             [[ -z "$add_ip" ]] && return
             if [[ "$add_ip" == *:* ]]; then
                 valid_ipv6_cidr "$add_ip" || { msg "${RED}[!] IPv6 白名单地址非法: $add_ip${NC}"; pause_return; return; }
-                has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -I INPUT -p tcp --dport "$SS_PORT" -s "$add_ip" -m comment --comment "Aio-box-${SS_PORT}-tcp-WL6" -j ACCEPT >/dev/null 2>&1 || die "IPv6 白名单规则写入失败: $add_ip"
+                has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1 || die '系统无可用 IPv6 防火墙。'
+                for proto in tcp udp; do
+                    $IPT6 -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$add_ip" -m comment --comment "Aio-box-${SS_PORT}-${proto}-WL6" -j ACCEPT >/dev/null 2>&1 || die "IPv6 白名单规则写入失败: $add_ip/$proto"
+                done
             else
                 valid_ipv4_cidr "$add_ip" || { msg "${RED}[!] IPv4 白名单地址非法: $add_ip${NC}"; pause_return; return; }
-                $IPT -w -I INPUT -p tcp --dport "$SS_PORT" -s "$add_ip" -m comment --comment "Aio-box-${SS_PORT}-tcp-WL" -j ACCEPT >/dev/null 2>&1 || die "IPv4 白名单规则写入失败: $add_ip"
+                for proto in tcp udp; do
+                    $IPT -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$add_ip" -m comment --comment "Aio-box-${SS_PORT}-${proto}-WL" -j ACCEPT >/dev/null 2>&1 || die "IPv4 白名单规则写入失败: $add_ip/$proto"
+                done
             fi
             save_firewall_rules
-            msg "${GREEN}已添加白名单: $add_ip${NC}"
+            msg "${GREEN}已添加白名单: $add_ip (TCP+UDP)${NC}"
             pause_return
             ;;
         2)
             read -r -ep '请输入要移除的 IP/CIDR: ' del_ip
             [[ -z "$del_ip" ]] && return
+            found=0
             if [[ "$del_ip" == *:* ]]; then
                 valid_ipv6_cidr "$del_ip" || { msg "${RED}[!] IPv6 白名单地址非法: $del_ip${NC}"; pause_return; return; }
-                found=0
-                while $IPT6 -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-tcp-WL6" | grep -Fq -- "$del_ip"; do
-                    rule=$($IPT6 -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-tcp-WL6" | grep -F -- "$del_ip" | head -n 1 | sed 's/^-A /-D /')
-                    [[ -z "$rule" ]] && break
-                    # shellcheck disable=SC2086
-                    $IPT6 -w $rule >/dev/null 2>&1 || die "IPv6 白名单规则删除失败: $del_ip"
-                    found=1
+                for proto in tcp udp; do
+                    while $IPT6 -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-${proto}-WL6" | grep -Fq -- "$del_ip"; do
+                        rule=$($IPT6 -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-${proto}-WL6" | grep -F -- "$del_ip" | head -n 1 | sed 's/^-A /-D /')
+                        [[ -z "$rule" ]] && break
+                        # shellcheck disable=SC2086
+                        $IPT6 -w $rule >/dev/null 2>&1 || die "IPv6 白名单规则删除失败: $del_ip/$proto"
+                        found=1
+                    done
                 done
             else
                 valid_ipv4_cidr "$del_ip" || { msg "${RED}[!] IPv4 白名单地址非法: $del_ip${NC}"; pause_return; return; }
-                found=0
-                while $IPT -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-tcp-WL" | grep -Fq -- "$del_ip"; do
-                    rule=$($IPT -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-tcp-WL" | grep -F -- "$del_ip" | head -n 1 | sed 's/^-A /-D /')
-                    [[ -z "$rule" ]] && break
-                    # shellcheck disable=SC2086
-                    $IPT -w $rule >/dev/null 2>&1 || die "IPv4 白名单规则删除失败: $del_ip"
-                    found=1
+                for proto in tcp udp; do
+                    while $IPT -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-${proto}-WL" | grep -Fq -- "$del_ip"; do
+                        rule=$($IPT -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-${proto}-WL" | grep -F -- "$del_ip" | head -n 1 | sed 's/^-A /-D /')
+                        [[ -z "$rule" ]] && break
+                        # shellcheck disable=SC2086
+                        $IPT -w $rule >/dev/null 2>&1 || die "IPv4 白名单规则删除失败: $del_ip/$proto"
+                        found=1
+                    done
                 done
             fi
             save_firewall_rules
@@ -1653,36 +1945,40 @@ manage_ss_whitelist() {
             pause_return
             ;;
         3)
-            if ! $IPT -w -C INPUT -p tcp --dport "$SS_PORT" -j DROP 2>/dev/null; then
-                $IPT -w -A INPUT -p tcp --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-tcp-DROP" -j DROP >/dev/null 2>&1 || die 'IPv4 SS DROP 规则写入失败。'
-            fi
-            if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
-                if ! $IPT6 -w -C INPUT -p tcp --dport "$SS_PORT" -j DROP 2>/dev/null; then
-                    $IPT6 -w -A INPUT -p tcp --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-tcp-DROP6" -j DROP >/dev/null 2>&1 || die 'IPv6 SS DROP 规则写入失败。'
+            for proto in tcp udp; do
+                if ! $IPT -w -C INPUT -p "$proto" --dport "$SS_PORT" -j DROP 2>/dev/null; then
+                    $IPT -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-${proto}-DROP" -j DROP >/dev/null 2>&1 || die "IPv4 SS DROP 规则写入失败: $proto"
                 fi
-            fi
+                if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
+                    if ! $IPT6 -w -C INPUT -p "$proto" --dport "$SS_PORT" -j DROP 2>/dev/null; then
+                        $IPT6 -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-${proto}-DROP6" -j DROP >/dev/null 2>&1 || die "IPv6 SS DROP 规则写入失败: $proto"
+                    fi
+                fi
+            done
             save_firewall_rules
-            msg "${GREEN}已开启白名单保护模式。${NC}"
+            msg "${GREEN}已开启白名单保护模式 (TCP+UDP)。${NC}"
             pause_return
             ;;
         4)
-            while $IPT -w -S INPUT 2>/dev/null | grep -q "Aio-box-${SS_PORT}-tcp-DROP"; do
-                rule=$($IPT -w -S INPUT 2>/dev/null | grep "Aio-box-${SS_PORT}-tcp-DROP" | head -n 1 | sed 's/^-A /-D /')
-                [[ -z "$rule" ]] && break
-                # shellcheck disable=SC2086
-                $IPT -w $rule >/dev/null 2>&1 || break
-            done
-            if command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
-                while $IPT6 -w -S INPUT 2>/dev/null | grep -q "Aio-box-${SS_PORT}-tcp-DROP6"; do
-                    rule=$($IPT6 -w -S INPUT 2>/dev/null | grep "Aio-box-${SS_PORT}-tcp-DROP6" | head -n 1 | sed 's/^-A /-D /')
+            for proto in tcp udp; do
+                while $IPT -w -S INPUT 2>/dev/null | grep -q "Aio-box-${SS_PORT}-${proto}-DROP"; do
+                    rule=$($IPT -w -S INPUT 2>/dev/null | grep "Aio-box-${SS_PORT}-${proto}-DROP" | head -n 1 | sed 's/^-A /-D /')
                     [[ -z "$rule" ]] && break
                     # shellcheck disable=SC2086
-                    $IPT6 -w $rule >/dev/null 2>&1 || break
+                    $IPT -w $rule >/dev/null 2>&1 || break
                 done
-            fi
-            allowPort "$SS_PORT" tcp
+                if command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
+                    while $IPT6 -w -S INPUT 2>/dev/null | grep -q "Aio-box-${SS_PORT}-${proto}-DROP6"; do
+                        rule=$($IPT6 -w -S INPUT 2>/dev/null | grep "Aio-box-${SS_PORT}-${proto}-DROP6" | head -n 1 | sed 's/^-A /-D /')
+                        [[ -z "$rule" ]] && break
+                        # shellcheck disable=SC2086
+                        $IPT6 -w $rule >/dev/null 2>&1 || break
+                    done
+                fi
+                allowPort "$SS_PORT" "$proto"
+            done
             save_firewall_rules
-            msg "${GREEN}已切换为全网开放模式。${NC}"
+            msg "${GREEN}已切换为全网开放模式 (TCP+UDP)。${NC}"
             pause_return
             ;;
         *) return 0 ;;
@@ -1732,8 +2028,8 @@ check_virgin_state() {
     clear
     init_system_environment
     msg "${YELLOW}删除全部节点与环境初始化 / Delete all nodes and perform environment initialization${NC}"
-    read -r -ep '确定执行环境深度自愈吗？(输入 y 确认): ' confirm_virgin
-    [[ "$confirm_virgin" =~ ^[Yy]$ ]] || { msg "${GREEN}操作已取消。${NC}"; pause_return; return; }
+    read -r -ep '确定执行环境深度自愈吗？[y/N]: ' confirm_virgin
+    is_yes "$confirm_virgin" || { msg "${GREEN}操作已取消。${NC}"; pause_return; return; }
     stop_all_managed_services
     killall -TERM xray sing-box hysteria 2>/dev/null || true
     sleep 1
@@ -1810,27 +2106,76 @@ EOF_SYSCTL
     pause_return
 }
 
+run_local_sni_benchmark() {
+    local url='https://ghproxy.net/https://gist.githubusercontent.com/alariclin/9779dee79e9d61333e3fe6ba4fc1d315/raw/8b8e9209355869b4e66f94343dea1a995af2b84c/gistfile1.txt'
+    if confirm_yes_no "$(printf "$(tr_msg confirm_remote)" '100-domain SNI benchmark gist')"; then
+        bash <(curl -fsSL "$url")
+    fi
+    pause_return
+}
+
+run_warp_manager() {
+    if confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'fscarmen/warp Cloudflare WARP menu')"; then
+        wget -N https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh && bash menu.sh
+    fi
+    pause_return
+}
+
+setup_swap_2g() {
+    clear
+    msg "${CYAN}======================================================================${NC}"
+    msg "${BOLD}${GREEN}Swap 虚拟内存一键划拨 / Allocate 2G Swap${NC}"
+    msg "${CYAN}======================================================================${NC}"
+    if [[ -f /swapfile ]]; then
+        msg "${YELLOW}$(tr_msg swap_exists)${NC}"
+    else
+        fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
+        chmod 600 /swapfile
+        mkswap /swapfile
+    fi
+    swapon /swapfile 2>/dev/null || true
+    if ! grep -qE '^/swapfile[[:space:]]+none[[:space:]]+swap[[:space:]]+sw[[:space:]]+0[[:space:]]+0' /etc/fstab 2>/dev/null; then
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+    swapon --show || true
+    msg "${GREEN}$(tr_msg swap_done)${NC}"
+    pause_return
+}
+
 vps_benchmark_menu() {
     clear
     msg "${CYAN}======================================================================${NC}"
-    msg "${BOLD}${GREEN}本机配置与 IP 测速纯净度 / Benchmark & IP Check${NC}"
+    msg "${BOLD}${GREEN}$(tr_msg toolbox_title)${NC}"
     msg "${CYAN}======================================================================${NC}"
-    msg "${YELLOW}1. 硬件信息与下载测速 (bench.sh)${NC}"
-    msg "${YELLOW}2. 流媒体解锁与回程网络 (Check.Place)${NC}"
-    msg "${GREEN}0. 返回主菜单${NC}"
-    read -r -ep '请选择 [0-2]: ' bench_choice
-    local confirm_remote
+    if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        msg "${YELLOW}1. System benchmark and download speed (bench.sh)${NC}"
+        msg "${YELLOW}2. IP quality, streaming unlock and route test (Check.Place)${NC}"
+        msg "${YELLOW}3. Local SNI preference test: 100 global whitelist domains${NC}"
+        msg "${YELLOW}4. Cloudflare WARP manager (egress IP masking / streaming unlock)${NC}"
+        msg "${YELLOW}5. Allocate 2G Swap (prevent OOM crashes)${NC}"
+        msg "${GREEN}0. Back${NC}"
+    else
+        msg "${YELLOW}1. 本机配置和下载测速 (bench.sh)${NC}"
+        msg "${YELLOW}2. IP纯净度、流媒体解锁与回程测试 (Check.Place)${NC}"
+        msg "${YELLOW}3. 本地 SNI 优选：100 个全球白名单域名全维度测速${NC}"
+        msg "${YELLOW}4. Cloudflare WARP 一键接管 (出站 IP 伪装/流媒体解锁)${NC}"
+        msg "${YELLOW}5. Swap 虚拟内存一键划拨 2G (防 OOM 宕机)${NC}"
+        msg "${GREEN}0. 返回主菜单${NC}"
+    fi
+    local bench_choice
+    read -r -ep 'Select [0-5]: ' bench_choice
     case "$bench_choice" in
         1)
-            read -r -ep '即将远程执行第三方脚本 bench.sh，确认执行？[y/N]: ' confirm_remote
-            [[ "$confirm_remote" =~ ^[Yy]$ ]] && wget -qO- https://bench.sh | bash
+            confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'bench.sh')" && wget -qO- https://bench.sh | bash
             pause_return
             ;;
         2)
-            read -r -ep '即将远程执行第三方脚本 Check.Place，确认执行？[y/N]: ' confirm_remote
-            [[ "$confirm_remote" =~ ^[Yy]$ ]] && bash <(curl -Ls https://Check.Place) -I
+            confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'Check.Place')" && bash <(curl -fsSL https://Check.Place) -I
             pause_return
             ;;
+        3) run_local_sni_benchmark ;;
+        4) run_warp_manager ;;
+        5) setup_swap_2g ;;
         *) return 0 ;;
     esac
 }
@@ -1865,6 +2210,8 @@ view_config() {
     clear
     [[ ! -f "$AIO_ENV" ]] && { msg "${RED}未检测到持久化配置变量。${NC}"; sleep 2; return 0; }
     source "$AIO_ENV"
+    VISION_SNI=${VISION_SNI:-${VLESS_SNI:-}}
+    XHTTP_SNI=${XHTTP_SNI:-${VLESS_SNI:-}}
     local F_IP="$LINK_IP" S_IP SS_BASE64 VLESS_URL XHTTP_URL HY2_URL SS_URL
     [[ "$LINK_IP" =~ : ]] && F_IP="[$LINK_IP]"
     [[ -z "$LINK_IP" || "$LINK_IP" == 'N/A' ]] && msg "${YELLOW}[!] 未能自动获取公网 IP，分享链接可能不可用。${NC}"
@@ -1875,12 +2222,12 @@ view_config() {
     msg "${BLUE}----------------------------------------------------------------------${NC}"
     msg "${YELLOW}[ 通用分享 URI / General URIs ]${NC}"
     if [[ "$MODE" == *'VISION'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
-        VLESS_URL="vless://$UUID@$F_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VLESS_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#Aio-VLESS-Vision"
+        VLESS_URL="vless://$UUID@$F_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VISION_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#Aio-VLESS-Vision"
         msg "${GREEN}${VLESS_URL}${NC}"
         generate_qr "$VLESS_URL"
     fi
-    if [[ "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ]]; then
-        XHTTP_URL="vless://$UUID@$F_IP:$XHTTP_PORT?encryption=none&security=reality&sni=$VLESS_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=xhttp&path=%2Fxhttp&mode=auto#Aio-VLESS-XHTTP"
+    if [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]]; then
+        XHTTP_URL="vless://$UUID@$F_IP:$XHTTP_PORT?encryption=none&security=reality&sni=$XHTTP_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=xhttp&path=%2Fxhttp&mode=stream-one#Aio-VLESS-XHTTP"
         msg "${GREEN}${XHTTP_URL}${NC}"
         generate_qr "$XHTTP_URL"
     fi
@@ -1902,9 +2249,10 @@ view_config() {
         msg "${GREEN}${SS_URL}${NC}"
         generate_qr "$SS_URL"
     fi
+    msg "${YELLOW}[提示] Clash/Mihomo 通常不能直接扫描单条 vless:// QR；请导入完整 YAML/订阅 URL，或复制下面的 Clash Meta 片段。${NC}"
 
     msg "${BLUE}----------------------------------------------------------------------${NC}"
-    msg "${YELLOW}[ Clash Meta 示例 ]${NC}"
+    msg "${YELLOW}[ Clash Meta / Mihomo 示例 ]${NC}"
     if [[ "$MODE" == *'VISION'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
         cat <<EOF_CM
   - name: "Aio-VLESS-Vision"
@@ -1912,35 +2260,44 @@ view_config() {
     server: $LINK_IP
     port: $VLESS_PORT
     uuid: $UUID
-    network: tcp
-    tls: true
     udp: true
-    flow: xtls-rprx-vision
+    tls: true
+    servername: $VISION_SNI
     client-fingerprint: chrome
-    servername: $VLESS_SNI
+    encryption: ""
+    network: tcp
+    flow: xtls-rprx-vision
+    packet-encoding: xudp
     reality-opts:
       public-key: $PUBLIC_KEY
       short-id: $SHORT_ID
+    smux:
+      enabled: false
 EOF_CM
     fi
-    if [[ "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ]]; then
+    if [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]]; then
         cat <<EOF_CM
   - name: "Aio-VLESS-XHTTP"
     type: vless
     server: $LINK_IP
     port: $XHTTP_PORT
     uuid: $UUID
-    network: xhttp
-    tls: true
     udp: true
-    xhttp-opts:
-      mode: auto
-      path: /xhttp
+    tls: true
+    servername: $XHTTP_SNI
     client-fingerprint: chrome
-    servername: $VLESS_SNI
+    encryption: ""
+    network: xhttp
+    alpn:
+      - h2
     reality-opts:
       public-key: $PUBLIC_KEY
       short-id: $SHORT_ID
+    xhttp-opts:
+      path: /xhttp
+      mode: stream-one
+    smux:
+      enabled: false
 EOF_CM
     fi
     if [[ "$MODE" == *'HY2'* || "$MODE" == *'ALL'* ]]; then
@@ -1954,11 +2311,11 @@ EOF_CM
     server: $HY2_DOMAIN
     ports: ${HY2_CLASH_PORTS}
     hop-interval: 30
-    password: $HY2_PASS
+    password: "$HY2_PASS"
     alpn: [h3]
     sni: $HY2_DOMAIN
     obfs: salamander
-    obfs-password: $HY2_OBFS
+    obfs-password: "$HY2_OBFS"
 EOF_CM
             else
                 cat <<EOF_CM
@@ -1966,11 +2323,11 @@ EOF_CM
     type: hysteria2
     server: $HY2_DOMAIN
     port: $HY2_BASE_PORT
-    password: $HY2_PASS
+    password: "$HY2_PASS"
     alpn: [h3]
     sni: $HY2_DOMAIN
     obfs: salamander
-    obfs-password: $HY2_OBFS
+    obfs-password: "$HY2_OBFS"
 EOF_CM
             fi
         else
@@ -1981,12 +2338,12 @@ EOF_CM
     server: $S_IP
     ports: ${HY2_CLASH_PORTS}
     hop-interval: 30
-    password: $HY2_PASS
+    password: "$HY2_PASS"
     alpn: [h3]
     skip-cert-verify: true
     fingerprint: $HY2_CERT_SHA256_FP
     obfs: salamander
-    obfs-password: $HY2_OBFS
+    obfs-password: "$HY2_OBFS"
 EOF_CM
             else
                 cat <<EOF_CM
@@ -1994,12 +2351,12 @@ EOF_CM
     type: hysteria2
     server: $S_IP
     port: $HY2_BASE_PORT
-    password: $HY2_PASS
+    password: "$HY2_PASS"
     alpn: [h3]
     skip-cert-verify: true
     fingerprint: $HY2_CERT_SHA256_FP
     obfs: salamander
-    obfs-password: $HY2_OBFS
+    obfs-password: "$HY2_OBFS"
 EOF_CM
             fi
         fi
@@ -2011,8 +2368,10 @@ EOF_CM
     server: $LINK_IP
     port: $SS_PORT
     cipher: 2022-blake3-aes-128-gcm
-    password: $SS_PASS
+    password: "$SS_PASS"
     udp: true
+    smux:
+      enabled: false
 EOF_CM
     fi
 
@@ -2070,7 +2429,7 @@ EOF_SB
     }
 EOF_SB
     fi
-    if [[ "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ]]; then
+    if [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]]; then
         msg "\n${YELLOW}--- v2rayN / v2rayNG XHTTP JSON ---${NC}"
         cat <<EOF_V2N
 {
@@ -2082,8 +2441,9 @@ EOF_SB
   "net": "xhttp",
   "type": "none",
   "path": "/xhttp",
+  "mode": "stream-one",
   "tls": "reality",
-  "sni": "$VLESS_SNI",
+  "sni": "$XHTTP_SNI",
   "fp": "chrome",
   "pbk": "$PUBLIC_KEY",
   "sid": "$SHORT_ID"
@@ -2098,29 +2458,101 @@ EOF_V2N
 show_usage() {
     clear
     msg "${CYAN}======================================================================${NC}"
-    msg "${BOLD}${GREEN}Aio-box 脚本全功能说明书${NC}"
+    msg "${BOLD}${GREEN}Aio-box 脚本全功能说明书 / Full Manual${NC}"
     msg "${CYAN}======================================================================${NC}"
-    cat <<'EOF_USAGE'
+    if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        cat <<'EOF_USAGE'
+[Deployment]
 1  Xray VLESS-Vision-Reality
+   TCP REALITY + Vision. Best default for long-term stealth. Port 443 defaults to www.apple.com; non-443 defaults to www.microsoft.com.
 2  Xray VLESS-XHTTP-Reality
+   XHTTP over REALITY. Best high-throughput desktop path with Mihomo v1.19.24+. Recommended: stream-one + h2 + smux disabled. Non-443 SNI defaults to www.microsoft.com.
 3  Xray Shadowsocks-2022
-4  官方 Hysteria 2
-5  Xray + 官方 Hysteria 2 全协议
+   SS-2022 relay/landing inbound. Default port 2053 TCP/UDP. Best used behind frontend proxies with whitelist.
+4  Native Hysteria 2
+   UDP/QUIC/H3 acceleration. Use ACME domain cert when available; otherwise self-signed cert with pinSHA256.
+5  Xray + Native Hysteria 2 All-in-one
+   Vision TCP 443 + XHTTP TCP 8443 + HY2 UDP 443 + SS-2022 TCP/UDP 2053. Balanced speed/fallback deployment.
 6  Sing-box VLESS-Vision-Reality
+   Low-memory single-core Vision deployment.
 7  Sing-box Shadowsocks-2022
+   Low-memory SS-2022 relay deployment, default 2053 TCP/UDP.
 8  Sing-box VLESS + SS-2022
+   Vision main path plus SS-2022 relay path in one sing-box process.
 9  Sing-box Hysteria 2
-10 Sing-box 全协议
-11 本机配置与 IP 测速
-12 VPS 一键优化
-13 全部节点参数显示
-14 脚本说明书
-15 脚本 OTA 升级与 Geo 资源更新
-16 一键全部清空卸载
-17 删除全部节点与环境初始化
-18 每月流量管控限制
-19 SS-2022 白名单 IP 管理
+   HY2 in sing-box, best for UDP/QUIC mobile paths.
+10 Sing-box All-in-one
+   Sing-box Vision + HY2 + SS-2022. No XHTTP by design.
+
+[Operations]
+11 Toolbox
+   bench.sh hardware/speed test; Check.Place IP/streaming/route test; 100-domain local SNI benchmark; Cloudflare WARP manager; 2G Swap allocation.
+12 VPS One-click Optimization
+   BBR/FQ, file descriptor limits, KeepAlive injection, health probe, logrotate/fail2ban defense.
+13 Display Node Parameters
+   Print URIs, QR codes, Clash/Mihomo YAML, sing-box outbounds, v2rayN/v2rayNG XHTTP JSON.
+14 Manual
+   This page.
+15 OTA & Geo Update
+   Update Aio-box script and Loyalsoldier geoip/geosite data.
+16 Full/Partial Uninstall
+   Remove proxy stack, firewall rules, services and optional sb shortcut.
+17 Environment Reset
+   Kill orphan processes, clean stale firewall rules, remove broken configs and services.
+18 Monthly Traffic Limit
+   vnStat-based monthly traffic cap; stop services after reaching quota.
+19 SS-2022 Whitelist Manager
+   Add/remove frontend IP/CIDR and enforce DROP for non-whitelisted sources.
+20 Language
+   Switch Chinese/English UI and save to /etc/ddr/.lang.
 EOF_USAGE
+    else
+        cat <<'EOF_USAGE'
+【部署类】
+1  Xray VLESS-Vision-Reality
+   TCP REALITY + Vision。长期隐蔽主力。443 端口默认 SNI 为 www.apple.com；非443默认 www.microsoft.com。
+2  Xray VLESS-XHTTP-Reality
+   XHTTP over REALITY。桌面高速优先，需 Mihomo v1.19.24+。推荐 stream-one + h2 + 关闭 smux。非443默认 www.microsoft.com。
+3  Xray Shadowsocks-2022
+   SS-2022 回程/落地入站。默认 2053 TCP/UDP。最适合公共前置/机场前置后接入，并建议白名单。
+4  官方 Hysteria 2
+   UDP/QUIC/H3 加速。优先自有域名 ACME 证书；无域名使用自签证书 + pinSHA256。
+5  Xray + 官方 Hysteria 2 全协议四合一
+   Vision TCP 443 + XHTTP TCP 8443 + HY2 UDP 443 + SS-2022 TCP/UDP 2053。兼顾隐蔽、速度、移动网络与链式回程。
+6  Sing-box VLESS-Vision-Reality
+   低内存单进程 Vision 部署。
+7  Sing-box Shadowsocks-2022
+   低内存 SS-2022 回程部署，默认 2053 TCP/UDP。
+8  Sing-box VLESS + SS-2022
+   Vision 主力 + SS-2022 回程双协议。
+9  Sing-box Hysteria 2
+   Sing-box 承载 HY2，适合 UDP/QUIC 移动链路。
+10 Sing-box 全协议三合一
+   Sing-box Vision + HY2 + SS-2022。按设计不包含 XHTTP。
+
+【运维类】
+11 综合工具箱
+   bench.sh硬件/下载测速；Check.Place IP纯净度/流媒体/回程；100域名本地SNI优选；Cloudflare WARP接管；2G Swap划拨。
+12 VPS 一键优化
+   BBR/FQ、文件句柄、KeepAlive、健康探针、logrotate/fail2ban防御。
+13 全部节点参数显示
+   输出 URI、二维码、Clash/Mihomo YAML、sing-box出站、v2rayN/v2rayNG XHTTP JSON。
+14 脚本说明书
+   当前页面。
+15 脚本 OTA 升级与 Geo 资源更新
+   更新 Aio-box 主脚本和 Loyalsoldier geoip/geosite 数据。
+16 一键全部清空卸载
+   删除代理栈、服务、防火墙规则，可选择是否保留 sb 快捷入口。
+17 删除全部节点与环境初始化
+   杀残留进程、清理陈旧规则、删除破损配置和服务。
+18 每月流量管控限制
+   基于 vnStat 设置月流量阈值，达到后自动停止服务。
+19 SS-2022 白名单 IP 管理
+   添加/删除前置机 IP/CIDR，对非白名单来源执行 DROP。
+20 语言设置
+   中英文切换，持久化保存至 /etc/ddr/.lang。
+EOF_USAGE
+    fi
     msg "${CYAN}======================================================================${NC}"
     pause_return
 }
@@ -2183,6 +2615,8 @@ enter_runtime() {
     fi
     need_interactive_tty
     mkdir -p /var/run "$AIO_DIR"
+    detect_lang
+    initial_language_select
     exec 9>"$LOCK_FILE"
     if command -v flock >/dev/null 2>&1; then
         flock -n 9 || die '检测到另一个 Aio-box 实例正在运行。'
@@ -2193,9 +2627,11 @@ show_cli_help() {
     cat <<'EOF_HELP'
 Aio-box
 Usage:
-  bash aio.sh              启动交互菜单
-  bash aio.sh --self-test  运行无副作用静态自测
-  bash aio.sh --help       显示命令行帮助
+  bash aio.sh                    启动交互菜单 / Start interactive menu
+  bash aio.sh --lang zh          设置中文并启动 / Use Chinese UI
+  bash aio.sh --lang en          Use English UI / 设置英文并启动
+  bash aio.sh --self-test        运行无副作用静态自测 / Run static self-test
+  bash aio.sh --help             显示命令行帮助 / Show help
 EOF_HELP
 }
 
@@ -2227,9 +2663,11 @@ run_self_tests() {
 
     UUID=00000000-0000-4000-8000-000000000000
     VLESS_SNI=www.example.com
+    VISION_SNI=www.apple.com
+    XHTTP_SNI=www.microsoft.com
     VLESS_PORT=8443
     XHTTP_PORT=9443
-    SS_PORT=24043
+    SS_PORT=2053
     HY2_BASE_PORT=443
     HY2_UP=100
     HY2_DOWN=1000
@@ -2245,8 +2683,12 @@ run_self_tests() {
     mkdir -p "$tmp/xray" "$tmp/sing-box"
     XRAY_CONFIG_PATH="$tmp/xray/config.json" build_xray_config ALL
     jq empty "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: build_xray_config JSON'; failures=$((failures + 1)); }
+    jq -e '.inbounds[] | select(.protocol=="shadowsocks" and .port==2053 and .settings.network=="tcp,udp")' "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: Xray SS-2022 2053 tcp,udp'; failures=$((failures + 1)); }
+    jq -e '.inbounds[] | select(.protocol=="vless" and .port==8443 and .streamSettings.realitySettings.serverNames[0]=="www.apple.com")' "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: Xray Vision SNI split'; failures=$((failures + 1)); }
+    jq -e '.inbounds[] | select(.protocol=="vless" and .port==9443 and .streamSettings.realitySettings.serverNames[0]=="www.microsoft.com")' "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: Xray XHTTP SNI split'; failures=$((failures + 1)); }
     SINGBOX_CONFIG_PATH="$tmp/sing-box/config.json" build_singbox_config ALL
     jq empty "$tmp/sing-box/config.json" >/dev/null 2>&1 || { echo 'FAIL: build_singbox_config JSON'; failures=$((failures + 1)); }
+    jq -e '.inbounds[] | select(.type=="shadowsocks" and .listen_port==2053 and (.network|not))' "$tmp/sing-box/config.json" >/dev/null 2>&1 || { echo 'FAIL: Sing-box SS-2022 2053 default network'; failures=$((failures + 1)); }
 
     if (( failures > 0 )); then
         echo "SELF_TEST_FAILED=$failures"
@@ -2259,47 +2701,85 @@ main() {
     case "${1:-}" in
         --help|-h) show_cli_help; exit 0 ;;
         --self-test) run_self_tests; exit $? ;;
+        --lang)
+            AIO_LANG_OVERRIDE="${2:-zh}"
+            enter_runtime "$@"
+            AIO_LANG=$(normalize_lang "$AIO_LANG_OVERRIDE")
+            save_lang
+            main_loop "$@"
+            ;;
+        --lang=*)
+            AIO_LANG_OVERRIDE="${1#--lang=}"
+            enter_runtime "$@"
+            AIO_LANG=$(normalize_lang "$AIO_LANG_OVERRIDE")
+            save_lang
+            main_loop "$@"
+            ;;
         '') enter_runtime "$@"; main_loop "$@" ;;
         *) enter_runtime "$@"; main_loop "$@" ;;
     esac
 }
 
 main_loop() {
+    detect_lang
     init_system_environment
     setup_shortcut
     GLOBAL_PUBLIC_IP=$(get_public_ip)
     while true; do
         local STATUS_STR='' CUR_MODE='' choice
-        is_service_running xray && STATUS_STR+="${GREEN}Xray-Core${NC} "
-        is_service_running sing-box && STATUS_STR+="${CYAN}Sing-Box${NC} "
-        is_service_running hysteria && STATUS_STR+="${GREEN}Hy2(Native)${NC} "
-        [[ -z "$STATUS_STR" ]] && STATUS_STR="${RED}Stack Stopped${NC}"
+        STATUS_STR=$(build_status_str)
         source "$AIO_ENV" 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=''
         clear
         msg "${BLUE}======================================================================${NC}"
         msg "${BOLD}${YELLOW}==============================Aio-box===============================${NC}"
         msg "${BLUE}======================================================================${NC}"
-        msg "网关/Gateway: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 核心/Core: $STATUS_STR $CUR_MODE"
-        msg "${BLUE}----------------------------------------------------------------------${NC}"
-        msg "${YELLOW}[ Xray-core 部署 ]${NC}                    ${YELLOW}[ Sing-box 部署 ]${NC}"
-        msg "${GREEN}1.${NC} VLESS-Vision-Reality               ${GREEN}6.${NC} VLESS-Vision-Reality"
-        msg "${GREEN}2.${NC} VLESS-XHTTP-Reality                ${GREEN}7.${NC} Shadowsocks-2022"
-        msg "${GREEN}3.${NC} Shadowsocks-2022                   ${GREEN}8.${NC} VLESS + SS-2022"
-        msg "${GREEN}4.${NC} Hysteria 2 (官方/Apernet)          ${GREEN}9.${NC} Hysteria 2 (Sing-box)"
-        msg "${GREEN}5.${NC} 全协议四合一 (Xray+Hy2)            ${GREEN}10.${NC} 全协议三合一 (Sing-box)"
-        msg "${BLUE}----------------------------------------------------------------------${NC}"
-        msg "${GREEN}11.${NC} 综合工具箱"
-        msg "${GREEN}12.${NC} VPS 一键优化"
-        msg "${GREEN}13.${NC} 全部节点参数显示"
-        msg "${GREEN}14.${NC} 脚本说明书"
-        msg "${GREEN}15.${NC} 脚本 OTA 升级与 Geo 资源更新"
-        msg "${GREEN}16.${NC} 一键全部清空卸载"
-        msg "${GREEN}17.${NC} 删除全部节点与环境初始化"
-        msg "${GREEN}18.${NC} 每月流量管控限制"
-        msg "${GREEN}19.${NC} SS-2022 白名单 IP 管理"
-        msg "${GREEN}0.${NC} 退出脚本"
-        msg "${BLUE}======================================================================${NC}"
-        read -r -ep '请求下发执行代号 / Request input command: ' choice
+        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+            msg "Gateway: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | Core: $STATUS_STR $CUR_MODE"
+            msg "${BLUE}----------------------------------------------------------------------${NC}"
+            msg "${YELLOW}[ Xray-core Deployment ]${NC}              ${YELLOW}[ Sing-box Deployment ]${NC}"
+            msg "${GREEN}1.${NC} VLESS-Vision-Reality               ${GREEN}6.${NC} VLESS-Vision-Reality"
+            msg "${GREEN}2.${NC} VLESS-XHTTP-Reality                ${GREEN}7.${NC} Shadowsocks-2022"
+            msg "${GREEN}3.${NC} Shadowsocks-2022                   ${GREEN}8.${NC} VLESS + SS-2022"
+            msg "${GREEN}4.${NC} Hysteria 2 (Native/Apernet)        ${GREEN}9.${NC} Hysteria 2 (Sing-box)"
+            msg "${GREEN}5.${NC} All-in-one (Xray+Hy2)              ${GREEN}10.${NC} All-in-one (Sing-box)"
+            msg "${BLUE}----------------------------------------------------------------------${NC}"
+            msg "${GREEN}11.${NC} Toolbox"
+            msg "${GREEN}12.${NC} VPS One-click Optimization"
+            msg "${GREEN}13.${NC} Display All Node Parameters"
+            msg "${GREEN}14.${NC} Manual"
+            msg "${GREEN}15.${NC} OTA & Geo Update"
+            msg "${GREEN}16.${NC} Clean Uninstall"
+            msg "${GREEN}17.${NC} Delete Nodes & Reinitialize Environment"
+            msg "${GREEN}18.${NC} Monthly Traffic Limit"
+            msg "${GREEN}19.${NC} SS-2022 Whitelist Manager"
+            msg "${GREEN}20.${NC} Language"
+            msg "${GREEN}0.${NC} Exit"
+            msg "${BLUE}======================================================================${NC}"
+            read -r -ep "$(tr_msg main_command)" choice
+        else
+            msg "网关/Gateway: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | 核心/Core: $STATUS_STR $CUR_MODE"
+            msg "${BLUE}----------------------------------------------------------------------${NC}"
+            msg "${YELLOW}[ Xray-core 部署 ]${NC}                    ${YELLOW}[ Sing-box 部署 ]${NC}"
+            msg "${GREEN}1.${NC} VLESS-Vision-Reality               ${GREEN}6.${NC} VLESS-Vision-Reality"
+            msg "${GREEN}2.${NC} VLESS-XHTTP-Reality                ${GREEN}7.${NC} Shadowsocks-2022"
+            msg "${GREEN}3.${NC} Shadowsocks-2022                   ${GREEN}8.${NC} VLESS + SS-2022"
+            msg "${GREEN}4.${NC} Hysteria 2 (官方/Apernet)          ${GREEN}9.${NC} Hysteria 2 (Sing-box)"
+            msg "${GREEN}5.${NC} 全协议四合一 (Xray+Hy2)            ${GREEN}10.${NC} 全协议三合一 (Sing-box)"
+            msg "${BLUE}----------------------------------------------------------------------${NC}"
+            msg "${GREEN}11.${NC} 综合工具箱"
+            msg "${GREEN}12.${NC} VPS 一键优化"
+            msg "${GREEN}13.${NC} 全部节点参数显示"
+            msg "${GREEN}14.${NC} 脚本说明书"
+            msg "${GREEN}15.${NC} 脚本 OTA 升级与 Geo 资源更新"
+            msg "${GREEN}16.${NC} 一键全部清空卸载"
+            msg "${GREEN}17.${NC} 删除全部节点与环境初始化"
+            msg "${GREEN}18.${NC} 每月流量管控限制"
+            msg "${GREEN}19.${NC} SS-2022 白名单 IP 管理"
+            msg "${GREEN}20.${NC} 语言设置 / Language"
+            msg "${GREEN}0.${NC} 退出脚本"
+            msg "${BLUE}======================================================================${NC}"
+            read -r -ep "$(tr_msg main_command)" choice
+        fi
         case "$choice" in
             1) deploy_xray VISION ;;
             2) deploy_xray XHTTP ;;
@@ -2320,6 +2800,7 @@ main_loop() {
             17) check_virgin_state ;;
             18) traffic_management_menu ;;
             19) manage_ss_whitelist ;;
+            20) language_menu ;;
             0) clear; rm -f "$LOCK_FILE"; exit 0 ;;
             *) sleep 1 ;;
         esac
