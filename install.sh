@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ==============================Aio-box===============================
+# ==============================A-BOX===============================
 set -o pipefail
 export DEBIAN_FRONTEND=noninteractive
 export LANG=${LANG:-en_US.UTF-8}
@@ -14,14 +14,14 @@ NC='\033[0m'
 BOLD='\033[1m'
 
 DEPS_MARKER='/etc/ddr/.deps.v20260504'
-SCRIPT_URL='https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh'
-AIO_DIR='/etc/ddr'
-AIO_ENV='/etc/ddr/.env'
-LOCK_FILE='/var/run/aio_box.lock'
+SCRIPT_URL='https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh'
+ABOX_DIR='/etc/ddr'
+ABOX_ENV='/etc/ddr/.env'
+LOCK_FILE='/var/run/A-BOX.lock'
 LANG_FILE='/etc/ddr/.lang'
 PUBLIC_IP_CACHE='/etc/ddr/.public_ip.cache'
 PUBLIC_IP_CACHE_TTL=600
-AIO_LANG='zh'
+ABOX_LANG='zh'
 
 msg() { echo -e "$*"; }
 die() { echo -e "${RED}[!] $*${NC}" >&2; exit 1; }
@@ -36,7 +36,7 @@ normalize_lang() {
 
 tr_msg() {
     local key="$1"
-    case "${AIO_LANG:-zh}:$key" in
+    case "${ABOX_LANG:-zh}:$key" in
         zh:press_return) echo '按回车返回...' ;;
         en:press_return) echo 'Press Enter to return...' ;;
         zh:select_prompt) echo '请选择 / Select' ;;
@@ -90,31 +90,31 @@ confirm_yes_no() {
 }
 
 detect_lang() {
-    if [[ -n "${AIO_LANG_OVERRIDE:-}" ]]; then
-        AIO_LANG=$(normalize_lang "$AIO_LANG_OVERRIDE")
-    elif [[ -n "${AIO_LANG:-}" && "${AIO_LANG:-}" != 'zh' ]]; then
-        AIO_LANG=$(normalize_lang "$AIO_LANG")
+    if [[ -n "${ABOX_LANG_OVERRIDE:-}" ]]; then
+        ABOX_LANG=$(normalize_lang "$ABOX_LANG_OVERRIDE")
+    elif [[ -n "${ABOX_LANG:-}" && "${ABOX_LANG:-}" != 'zh' ]]; then
+        ABOX_LANG=$(normalize_lang "$ABOX_LANG")
     elif [[ -r "$LANG_FILE" ]]; then
-        AIO_LANG=$(normalize_lang "$(tr -d '[:space:]' < "$LANG_FILE" 2>/dev/null)")
+        ABOX_LANG=$(normalize_lang "$(tr -d '[:space:]' < "$LANG_FILE" 2>/dev/null)")
     else
-        AIO_LANG='zh'
+        ABOX_LANG='zh'
     fi
 }
 
 save_lang() {
-    mkdir -p "$AIO_DIR"
-    printf '%s\n' "${AIO_LANG:-zh}" > "$LANG_FILE"
+    mkdir -p "$ABOX_DIR"
+    printf '%s\n' "${ABOX_LANG:-zh}" > "$LANG_FILE"
     chmod 600 "$LANG_FILE" 2>/dev/null || true
 }
 
 initial_language_select() {
-    [[ -f "$LANG_FILE" || -n "${AIO_LANG_OVERRIDE:-}" ]] && return 0
+    [[ -f "$LANG_FILE" || -n "${ABOX_LANG_OVERRIDE:-}" ]] && return 0
     local c
     echo 'Language / 语言'
     echo '1. 中文'
     echo '2. English'
     read -r -ep 'Select [1-2, default 1]: ' c || true
-    case "$c" in 2) AIO_LANG='en' ;; *) AIO_LANG='zh' ;; esac
+    case "$c" in 2) ABOX_LANG='en' ;; *) ABOX_LANG='zh' ;; esac
     save_lang
 }
 
@@ -129,8 +129,8 @@ language_menu() {
     local c
     read -r -ep 'Select [0-2]: ' c
     case "$c" in
-        1) AIO_LANG='zh'; save_lang; msg "${GREEN}$(tr_msg lang_saved)${NC}"; pause_return ;;
-        2) AIO_LANG='en'; save_lang; msg "${GREEN}$(tr_msg lang_saved)${NC}"; pause_return ;;
+        1) ABOX_LANG='zh'; save_lang; msg "${GREEN}$(tr_msg lang_saved)${NC}"; pause_return ;;
+        2) ABOX_LANG='en'; save_lang; msg "${GREEN}$(tr_msg lang_saved)${NC}"; pause_return ;;
         *) return 0 ;;
     esac
 }
@@ -312,7 +312,7 @@ get_public_ip_fresh() {
 cache_public_ip() {
     local ip="$1"
     [[ -n "$ip" && "$ip" != 'N/A' ]] || return 0
-    mkdir -p "$AIO_DIR" 2>/dev/null || true
+    mkdir -p "$ABOX_DIR" 2>/dev/null || true
     printf '%s\n' "$ip" > "$PUBLIC_IP_CACHE" 2>/dev/null || true
     chmod 600 "$PUBLIC_IP_CACHE" 2>/dev/null || true
 }
@@ -444,7 +444,7 @@ init_system_environment() {
                 ;;
         esac
         ${installType} "${deps[@]}" >/dev/null 2>&1 || die '基础依赖包安装失败。'
-        mkdir -p "$AIO_DIR" && touch "$DEPS_MARKER"
+        mkdir -p "$ABOX_DIR" && touch "$DEPS_MARKER"
         deps_initialized=1
     fi
 
@@ -628,26 +628,26 @@ save_firewall_rules() {
 allowPort() {
     local port=$1 type=${2:-tcp}
     if ! $IPT -w -C INPUT -p "$type" --dport "$port" -j ACCEPT 2>/dev/null; then
-        $IPT -w -I INPUT -p "$type" --dport "$port" -m comment --comment "Aio-box-${port}-${type}" -j ACCEPT >/dev/null 2>&1 || die "IPv4 防火墙放行失败: ${port}/${type}"
+        $IPT -w -I INPUT -p "$type" --dport "$port" -m comment --comment "A-BOX-${port}-${type}" -j ACCEPT >/dev/null 2>&1 || die "IPv4 防火墙放行失败: ${port}/${type}"
     fi
     if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
         if ! $IPT6 -w -C INPUT -p "$type" --dport "$port" -j ACCEPT 2>/dev/null; then
-            $IPT6 -w -I INPUT -p "$type" --dport "$port" -m comment --comment "Aio-box-${port}-${type}" -j ACCEPT >/dev/null 2>&1 || die "IPv6 防火墙放行失败: ${port}/${type}"
+            $IPT6 -w -I INPUT -p "$type" --dport "$port" -m comment --comment "A-BOX-${port}-${type}" -j ACCEPT >/dev/null 2>&1 || die "IPv6 防火墙放行失败: ${port}/${type}"
         fi
     fi
 }
 
 clean_nat_rules() {
     local rule
-    while $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q 'Aio-box-HY2-HOP'; do
-        rule=$($IPT -w -t nat -S PREROUTING 2>/dev/null | grep 'Aio-box-HY2-HOP' | head -n 1 | sed 's/^-A /-D /')
+    while $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q 'A-BOX-HY2-HOP'; do
+        rule=$($IPT -w -t nat -S PREROUTING 2>/dev/null | grep 'A-BOX-HY2-HOP' | head -n 1 | sed 's/^-A /-D /')
         [[ -z "$rule" ]] && break
         # shellcheck disable=SC2086
         $IPT -w -t nat $rule 2>/dev/null || break
     done
     if command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -t nat -S PREROUTING >/dev/null 2>&1; then
-        while $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q 'Aio-box-HY2-HOP'; do
-            rule=$($IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep 'Aio-box-HY2-HOP' | head -n 1 | sed 's/^-A /-D /')
+        while $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q 'A-BOX-HY2-HOP'; do
+            rule=$($IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep 'A-BOX-HY2-HOP' | head -n 1 | sed 's/^-A /-D /')
             [[ -z "$rule" ]] && break
             # shellcheck disable=SC2086
             $IPT6 -w -t nat $rule 2>/dev/null || break
@@ -657,15 +657,15 @@ clean_nat_rules() {
 
 clean_input_rules() {
     local rule
-    while $IPT -w -S INPUT 2>/dev/null | grep -q 'Aio-box-'; do
-        rule=$($IPT -w -S INPUT 2>/dev/null | grep 'Aio-box-' | head -n 1 | sed 's/^-A /-D /')
+    while $IPT -w -S INPUT 2>/dev/null | grep -q 'A-BOX-'; do
+        rule=$($IPT -w -S INPUT 2>/dev/null | grep 'A-BOX-' | head -n 1 | sed 's/^-A /-D /')
         [[ -z "$rule" ]] && break
         # shellcheck disable=SC2086
         $IPT -w $rule 2>/dev/null || break
     done
     if command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
-        while $IPT6 -w -S INPUT 2>/dev/null | grep -q 'Aio-box-'; do
-            rule=$($IPT6 -w -S INPUT 2>/dev/null | grep 'Aio-box-' | head -n 1 | sed 's/^-A /-D /')
+        while $IPT6 -w -S INPUT 2>/dev/null | grep -q 'A-BOX-'; do
+            rule=$($IPT6 -w -S INPUT 2>/dev/null | grep 'A-BOX-' | head -n 1 | sed 's/^-A /-D /')
             [[ -z "$rule" ]] && break
             # shellcheck disable=SC2086
             $IPT6 -w $rule 2>/dev/null || break
@@ -690,7 +690,7 @@ selected_port_pairs() {
 }
 
 check_selected_ports_free() {
-    msg "${YELLOW}[*] 正在检查新选择端口是否被非 Aio-box 进程占用...${NC}"
+    msg "${YELLOW}[*] 正在检查新选择端口是否被非 A-BOX 进程占用...${NC}"
     local pairs pair proto p holder dup
     pairs=$(selected_port_pairs | awk 'NF')
     dup=$(printf '%s\n' "$pairs" | awk 'NF{seen[$0]++} END{for(k in seen) if(seen[k]>1) print k}' | head -n 1)
@@ -709,7 +709,7 @@ check_selected_ports_free() {
         proto=${pair%/*}; p=${pair#*/}
         holder=$(ss -H -n -l -p -A "$proto" 2>/dev/null | grep -E "[:.]${p}\b" | grep -vE 'xray|sing-box|hysteria' || true)
         [[ -z "$holder" ]] && continue
-        msg "${RED}[!] 新选择端口 ${p}/${proto} 已被非 Aio-box 进程占用：${NC}"
+        msg "${RED}[!] 新选择端口 ${p}/${proto} 已被非 A-BOX 进程占用：${NC}"
         echo "$holder"
         die "请先手动释放端口 ${p}/${proto}。"
     done
@@ -723,7 +723,7 @@ check_selected_ports_free() {
             fi
         done | grep -vE 'xray|sing-box|hysteria' || true)
         if [[ -n "$holder" ]]; then
-            msg "${RED}[!] HY2 UDP 跳跃区间 ${HY2_RANGE_START}-${HY2_RANGE_END} 已被非 Aio-box 进程占用：${NC}"
+            msg "${RED}[!] HY2 UDP 跳跃区间 ${HY2_RANGE_START}-${HY2_RANGE_END} 已被非 A-BOX 进程占用：${NC}"
             echo "$holder"
             die '请先手动释放 HY2 UDP 跳跃区间内的占用端口。'
         fi
@@ -731,7 +731,7 @@ check_selected_ports_free() {
 }
 
 release_ports() {
-    msg "${YELLOW}[*] 正在停止 Aio-box 托管服务并检查端口占用...${NC}"
+    msg "${YELLOW}[*] 正在停止 A-BOX 托管服务并检查端口占用...${NC}"
     stop_all_managed_services
     sleep 1
     local pairs pair proto p holder
@@ -740,7 +740,7 @@ release_ports() {
         proto=${pair%/*}; p=${pair#*/}
         holder=$(ss -H -n -l -p -A "$proto" 2>/dev/null | grep -E "[:.]${p}\b" | grep -vE 'xray|sing-box|hysteria' || true)
         [[ -z "$holder" ]] && continue
-        msg "${RED}[!] 端口 ${p}/${proto} 已被非 Aio-box 进程占用：${NC}"
+        msg "${RED}[!] 端口 ${p}/${proto} 已被非 A-BOX 进程占用：${NC}"
         echo "$holder"
         die "请先手动释放端口 ${p}/${proto}。脚本不会自动 kill 非托管进程。"
     done
@@ -756,32 +756,32 @@ write_if_changed() {
 }
 
 setup_shortcut() {
-    mkdir -p "$AIO_DIR"
+    mkdir -p "$ABOX_DIR"
     if [[ "${1:-}" == 'update' ]]; then
-        curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o /tmp/aio.sh.tmp || die '快捷入口脚本下载失败。'
-        bash -n /tmp/aio.sh.tmp || die '更新脚本语法校验失败。'
-        grep -q '==============================Aio-box===============================' /tmp/aio.sh.tmp || die '更新脚本文本指纹不匹配。'
-        write_if_changed "$AIO_DIR/aio.sh" /tmp/aio.sh.tmp
+        curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o /tmp/A-BOX.sh.tmp || die '快捷入口脚本下载失败。'
+        bash -n /tmp/A-BOX.sh.tmp || die '更新脚本语法校验失败。'
+        grep -q '==============================A-BOX===============================' /tmp/A-BOX.sh.tmp || die '更新脚本文本指纹不匹配。'
+        write_if_changed "$ABOX_DIR/A-BOX.sh" /tmp/A-BOX.sh.tmp
     elif [[ -f "$0" && -r "$0" && "$0" != 'bash' && "$0" != '-bash' ]]; then
-        if [[ ! -f "$AIO_DIR/aio.sh" ]] || ! cmp -s "$0" "$AIO_DIR/aio.sh"; then
-            cp -f "$0" "$AIO_DIR/aio.sh"
+        if [[ ! -f "$ABOX_DIR/A-BOX.sh" ]] || ! cmp -s "$0" "$ABOX_DIR/A-BOX.sh"; then
+            cp -f "$0" "$ABOX_DIR/A-BOX.sh"
         fi
-    elif [[ ! -f "$AIO_DIR/aio.sh" ]]; then
-        curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o /tmp/aio.sh.tmp || die '无法从远端创建持久化入口。'
-        bash -n /tmp/aio.sh.tmp || die '持久化脚本语法校验失败。'
-        grep -q '==============================Aio-box===============================' /tmp/aio.sh.tmp || die '持久化脚本文本指纹不匹配。'
-        write_if_changed "$AIO_DIR/aio.sh" /tmp/aio.sh.tmp
+    elif [[ ! -f "$ABOX_DIR/A-BOX.sh" ]]; then
+        curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o /tmp/A-BOX.sh.tmp || die '无法从远端创建持久化入口。'
+        bash -n /tmp/A-BOX.sh.tmp || die '持久化脚本语法校验失败。'
+        grep -q '==============================A-BOX===============================' /tmp/A-BOX.sh.tmp || die '持久化脚本文本指纹不匹配。'
+        write_if_changed "$ABOX_DIR/A-BOX.sh" /tmp/A-BOX.sh.tmp
     fi
-    chmod +x "$AIO_DIR/aio.sh"
+    chmod +x "$ABOX_DIR/A-BOX.sh"
 
     local shortcut_tmp
-    shortcut_tmp=$(mktemp /tmp/aio-sb.XXXXXX) || die '快捷入口临时文件创建失败。'
+    shortcut_tmp=$(mktemp /tmp/A-BOX-sb.XXXXXX) || die '快捷入口临时文件创建失败。'
     cat > "$shortcut_tmp" <<'EOS'
 #!/usr/bin/env bash
 if [[ $EUID -eq 0 ]]; then
-    exec bash /etc/ddr/aio.sh "$@"
+    exec bash /etc/ddr/A-BOX.sh "$@"
 elif command -v sudo >/dev/null 2>&1; then
-    exec sudo bash /etc/ddr/aio.sh "$@"
+    exec sudo bash /etc/ddr/A-BOX.sh "$@"
 else
     echo 'Root privileges required. Please run: su -'
     exit 1
@@ -888,9 +888,9 @@ reset_protocol_vars() {
 
 write_env() {
     local env_core="$1" env_mode="$2" old_traffic_limit_gb='' old_traffic_limit_mode=''
-    if [[ -f "$AIO_ENV" ]]; then
-        old_traffic_limit_gb=$(grep '^TRAFFIC_LIMIT_GB=' "$AIO_ENV" | tail -n 1 | cut -d= -f2- | tr -d '"')
-        old_traffic_limit_mode=$(grep '^TRAFFIC_LIMIT_MODE=' "$AIO_ENV" | tail -n 1 | cut -d= -f2- | tr -d '"')
+    if [[ -f "$ABOX_ENV" ]]; then
+        old_traffic_limit_gb=$(grep '^TRAFFIC_LIMIT_GB=' "$ABOX_ENV" | tail -n 1 | cut -d= -f2- | tr -d '"')
+        old_traffic_limit_mode=$(grep '^TRAFFIC_LIMIT_MODE=' "$ABOX_ENV" | tail -n 1 | cut -d= -f2- | tr -d '"')
     fi
     umask 077
     {
@@ -928,16 +928,16 @@ write_env() {
         printf 'ENABLE_KEEPALIVE=%s\n' "$(shell_quote "${ENABLE_KEEPALIVE:-}")"
         [[ -n "$old_traffic_limit_gb" ]] && printf 'TRAFFIC_LIMIT_GB=%s\n' "$(shell_quote "$old_traffic_limit_gb")"
         [[ -n "$old_traffic_limit_mode" ]] && printf 'TRAFFIC_LIMIT_MODE=%s\n' "$(shell_quote "$old_traffic_limit_mode")"
-    } > "$AIO_ENV"
-    chmod 600 "$AIO_ENV"
+    } > "$ABOX_ENV"
+    chmod 600 "$ABOX_ENV"
 }
 
 setup_active_defense() {
     msg "${YELLOW}[*] 正在挂载环形缓冲日志与 Fail2Ban 主动防御矩阵...${NC}"
-    touch /var/log/aio-box-xray-access.log /var/log/aio-box-xray-error.log /var/log/aio-box-singbox.log 2>/dev/null || true
-    chmod 644 /var/log/aio-box-*.log 2>/dev/null || true
-    cat > /etc/logrotate.d/aio-box <<'EOF_LOGROTATE'
-/var/log/aio-box-*.log {
+    touch /var/log/A-BOX-xray-access.log /var/log/A-BOX-xray-error.log /var/log/A-BOX-singbox.log 2>/dev/null || true
+    chmod 644 /var/log/A-BOX-*.log 2>/dev/null || true
+    cat > /etc/logrotate.d/A-BOX <<'EOF_LOGROTATE'
+/var/log/A-BOX-*.log {
     su root root
     daily
     rotate 2
@@ -950,23 +950,23 @@ setup_active_defense() {
 EOF_LOGROTATE
     if command -v fail2ban-client >/dev/null 2>&1; then
         mkdir -p /etc/fail2ban/filter.d /etc/fail2ban/jail.d
-        cat > /etc/fail2ban/filter.d/aio-box.conf <<'EOF_F2B_FILTER'
+        cat > /etc/fail2ban/filter.d/A-BOX.conf <<'EOF_F2B_FILTER'
 [Definition]
 failregex = ^.*(?:rejected|invalid request|bad request|authentication failed).* from <HOST>[: ].*$
             ^.*<HOST>.*(?:rejected|invalid|unauthorized|forbidden).*$
 ignoreregex =
 EOF_F2B_FILTER
-        cat > /etc/fail2ban/jail.d/aio-box.local <<'EOF_F2B_JAIL'
-[aio-box]
+        cat > /etc/fail2ban/jail.d/A-BOX.local <<'EOF_F2B_JAIL'
+[A-BOX]
 enabled = true
 port = 1-65535
-filter = aio-box
-logpath = /var/log/aio-box-xray-error.log
-          /var/log/aio-box-singbox.log
+filter = A-BOX
+logpath = /var/log/A-BOX-xray-error.log
+          /var/log/A-BOX-singbox.log
 maxretry = 8
 findtime = 120
 bantime = 3600
-action = iptables-allports[name=AioBox]
+action = iptables-allports[name=A-BOX]
 EOF_F2B_JAIL
         if [[ "$INIT_SYS" == 'systemd' ]]; then
             systemctl restart fail2ban 2>/dev/null || true
@@ -978,8 +978,8 @@ EOF_F2B_JAIL
 
 setup_health_monitor() {
     msg "${YELLOW}[*] 正在注入 L4 套接字自愈探针...${NC}"
-    mkdir -p "$AIO_DIR"
-    cat > "$AIO_DIR/socket_probe.sh" <<'EOF_PROBE'
+    mkdir -p "$ABOX_DIR"
+    cat > "$ABOX_DIR/socket_probe.sh" <<'EOF_PROBE'
 #!/usr/bin/env bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 source /etc/ddr/.env 2>/dev/null || exit 0
@@ -1039,12 +1039,12 @@ HY2_SRV="$CORE"
 [[ "$CORE" == 'xray' && "$MODE" == *'ALL'* ]] && HY2_SRV='hysteria'
 
 if [[ "${HY2_HOP:-}" == 'true' && "${HY2_HOP_IMPL:-}" == 'manual' && -n "${HY2_RANGE_START:-}" && -n "${HY2_RANGE_END:-}" ]]; then
-    if ! $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q 'Aio-box-HY2-HOP'; then
+    if ! $IPT -w -t nat -S PREROUTING 2>/dev/null | grep -q 'A-BOX-HY2-HOP'; then
         check_restart "$HY2_SRV"
         exit 0
     fi
     if has_ipv6 && ipv6_nat_redirect_usable; then
-        if ! $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q 'Aio-box-HY2-HOP'; then
+        if ! $IPT6 -w -t nat -S PREROUTING 2>/dev/null | grep -q 'A-BOX-HY2-HOP'; then
             check_restart "$HY2_SRV"
             exit 0
         fi
@@ -1064,7 +1064,7 @@ if [[ -n "${SS_PORT:-}" ]] && ! ss -H -nlt 2>/dev/null | awk '{print $4}' | grep
     check_restart "$CORE"; exit 0
 fi
 EOF_PROBE
-    chmod +x "$AIO_DIR/socket_probe.sh"
+    chmod +x "$ABOX_DIR/socket_probe.sh"
     local tmp_cron
     tmp_cron=$(mktemp)
     crontab -l 2>/dev/null | grep -vE '^no crontab for|^#' | grep -v '/etc/ddr/socket_probe.sh' > "$tmp_cron" || true
@@ -1074,8 +1074,8 @@ EOF_PROBE
 }
 
 setup_geo_cron() {
-    mkdir -p "$AIO_DIR"
-    cat > "$AIO_DIR/geo_update.sh" <<'EOF_GEO'
+    mkdir -p "$ABOX_DIR"
+    cat > "$ABOX_DIR/geo_update.sh" <<'EOF_GEO'
 #!/usr/bin/env bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 GEOIP_URL='https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat'
@@ -1095,7 +1095,7 @@ targets=0
 [[ -d '/etc/sing-box' ]] && targets=$((targets + 1))
 (( targets == 0 )) && exit 0
 
-tmpdir=$(mktemp -d /tmp/aio-geo.XXXXXX) || exit 1
+tmpdir=$(mktemp -d /tmp/A-BOX-geo.XXXXXX) || exit 1
 trap 'rm -rf "$tmpdir"' EXIT
 fetch_one "$GEOIP_URL" "$tmpdir/geoip.dat" || exit 1
 fetch_one "$GEOSITE_URL" "$tmpdir/geosite.dat" || exit 1
@@ -1111,7 +1111,7 @@ if [[ -d '/etc/sing-box' ]]; then
     if command -v systemctl >/dev/null 2>&1; then systemctl restart sing-box 2>/dev/null || true; else rc-service sing-box restart 2>/dev/null || true; fi
 fi
 EOF_GEO
-    chmod +x "$AIO_DIR/geo_update.sh"
+    chmod +x "$ABOX_DIR/geo_update.sh"
     local tmp_cron
     tmp_cron=$(mktemp)
     crontab -l 2>/dev/null | grep -vE '^no crontab for|^#' | grep -v '/etc/ddr/geo_update.sh' > "$tmp_cron" || true
@@ -1134,7 +1134,7 @@ pre_install_setup() {
     GLOBAL_PUBLIC_IP=$(refresh_public_ip)
 
     msg "\n${CYAN}======================================================================${NC}"
-    if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+    if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
         msg "${BOLD}Parameter Wizard [Engine: $CORE_IN | Mode: $MODE_IN]${NC}"
     else
         msg "${BOLD}参数构造向导 [Engine: $CORE_IN | Mode: $MODE_IN]${NC}"
@@ -1163,7 +1163,7 @@ pre_install_setup() {
         HY2_BASE_PORT=${INPUT_H_PORT:-$DEF_H_PORT}
         valid_port "$HY2_BASE_PORT" || die "$(printf "$(tr_msg bad_port)" "$HY2_BASE_PORT")"
 
-        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
             read -r -ep '   [HY2] Do you have a domain already resolved to this server? (empty = self-signed certificate): ' INPUT_H_DOMAIN
         else
             read -r -ep '   [HY2] 是否拥有已解析到本机的域名？(留空使用默认自签证书): ' INPUT_H_DOMAIN
@@ -1174,7 +1174,7 @@ pre_install_setup() {
             [[ "${GLOBAL_PUBLIC_IP:-N/A}" != 'N/A' ]] && verify_domain_points_to_self "$HY2_DOMAIN" "$GLOBAL_PUBLIC_IP"
         fi
 
-        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
             read -r -ep '   [HY2] Enable port hopping? [Y/N]: ' INPUT_H_HOP
         else
             read -r -ep '   [HY2] 是否开启端口跳跃 (单端口被限速环境建议开启)? [Y/N]: ' INPUT_H_HOP
@@ -1203,14 +1203,14 @@ pre_install_setup() {
             HY2_MONITOR_PORT="$HY2_BASE_PORT"
         fi
 
-        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
             read -r -ep '   [HY2] Downlink Mbps (default: 1000): ' INPUT_H_DOWN
         else
             read -r -ep '   [HY2] 下行速率(Mbps) (回车默认: 1000): ' INPUT_H_DOWN
         fi
         HY2_DOWN=${INPUT_H_DOWN:-1000}
         valid_positive_int "$HY2_DOWN" || die "速率非法 / Invalid rate: $HY2_DOWN"
-        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
             read -r -ep '   [HY2] Uplink Mbps (default: 100): ' INPUT_H_UP
         else
             read -r -ep '   [HY2] 上行速率(Mbps) (回车默认: 100): ' INPUT_H_UP
@@ -1219,7 +1219,7 @@ pre_install_setup() {
         valid_positive_int "$HY2_UP" || die "速率非法 / Invalid rate: $HY2_UP"
 
         local masq_default="https://${VISION_SNI:-${XHTTP_SNI:-www.samsung.com}}/"
-        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
             read -r -ep "   [HY2] Enter HTTP/3 masquerade URL (default: $masq_default): " INPUT_H_MASQ
         else
             read -r -ep "   [HY2] 请输入 HTTP/3 伪装站点 URL (回车默认: $masq_default): " INPUT_H_MASQ
@@ -1232,7 +1232,7 @@ pre_install_setup() {
         read -r -ep "$prompt" INPUT_S_PORT
         SS_PORT=${INPUT_S_PORT:-$DEF_S_PORT}
         valid_port "$SS_PORT" || die "$(printf "$(tr_msg bad_port)" "$SS_PORT")"
-        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
             read -r -ep '   [SS-2022] Enter frontend whitelist IP/CIDR (empty = open to all, space-separated): ' INPUT_SS_WL
         else
             read -r -ep '   [SS-2022] 请输入前置机白名单 IP/CIDR (留空全网开放, 多个用空格分隔): ' INPUT_SS_WL
@@ -1249,7 +1249,7 @@ pre_install_setup() {
         fi
     fi
 
-    if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+    if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
         read -r -ep '   [Global] Enable TCP KeepAlive 45s to prevent NAT idle disconnect? [Y/N]: ' INPUT_KA
     else
         read -r -ep '   [全局] 是否开启 TCP KeepAlive (45s) 防治 NAT 空闲断连? [Y/N]: ' INPUT_KA
@@ -1279,23 +1279,23 @@ pre_install_setup() {
                     if [[ "$ip" == *:* ]]; then
                         if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
                             if ! $IPT6 -w -C INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -j ACCEPT 2>/dev/null; then
-                                $IPT6 -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -m comment --comment "Aio-box-${SS_PORT}-${proto}-WL6" -j ACCEPT >/dev/null 2>&1 || die "IPv6 白名单规则写入失败: $ip/$proto"
+                                $IPT6 -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -m comment --comment "A-BOX-${SS_PORT}-${proto}-WL6" -j ACCEPT >/dev/null 2>&1 || die "IPv6 白名单规则写入失败: $ip/$proto"
                             fi
                         fi
                     else
                         if ! $IPT -w -C INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -j ACCEPT 2>/dev/null; then
-                            $IPT -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -m comment --comment "Aio-box-${SS_PORT}-${proto}-WL" -j ACCEPT >/dev/null 2>&1 || die "IPv4 白名单规则写入失败: $ip/$proto"
+                            $IPT -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$ip" -m comment --comment "A-BOX-${SS_PORT}-${proto}-WL" -j ACCEPT >/dev/null 2>&1 || die "IPv4 白名单规则写入失败: $ip/$proto"
                         fi
                     fi
                 done
             done
             for proto in tcp udp; do
                 if ! $IPT -w -C INPUT -p "$proto" --dport "$SS_PORT" -j DROP 2>/dev/null; then
-                    $IPT -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-${proto}-DROP" -j DROP >/dev/null 2>&1 || die "IPv4 SS DROP 规则写入失败: $proto"
+                    $IPT -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "A-BOX-${SS_PORT}-${proto}-DROP" -j DROP >/dev/null 2>&1 || die "IPv4 SS DROP 规则写入失败: $proto"
                 fi
                 if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
                     if ! $IPT6 -w -C INPUT -p "$proto" --dport "$SS_PORT" -j DROP 2>/dev/null; then
-                        $IPT6 -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-${proto}-DROP6" -j DROP >/dev/null 2>&1 || die "IPv6 SS DROP 规则写入失败: $proto"
+                        $IPT6 -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "A-BOX-${SS_PORT}-${proto}-DROP6" -j DROP >/dev/null 2>&1 || die "IPv6 SS DROP 规则写入失败: $proto"
                     fi
                 fi
             done
@@ -1357,7 +1357,7 @@ build_xray_config() {
     tmp_out="${out}.tmp.$$"
     mkdir -p "$(dirname "$out")"
     jq -n --argjson inbounds "$inbounds_json" '{
-        log:{loglevel:"warning", access:"/var/log/aio-box-xray-access.log", error:"/var/log/aio-box-xray-error.log"},
+        log:{loglevel:"warning", access:"/var/log/A-BOX-xray-access.log", error:"/var/log/A-BOX-xray-error.log"},
         routing:{domainStrategy:"IPIfNonMatch", rules:[
             {type:"field", protocol:["bittorrent"], outboundTag:"block"},
             {type:"field", domain:["geosite:category-ads-all"], outboundTag:"block"}
@@ -1422,7 +1422,7 @@ build_singbox_config() {
     tmp_out="${out}.tmp.$$"
     mkdir -p "$(dirname "$out")"
     jq -n --argjson inbounds "$inbounds_json" '{
-        log:{level:"warn", output:"/var/log/aio-box-singbox.log"},
+        log:{level:"warn", output:"/var/log/A-BOX-singbox.log"},
         route:{rules:[{protocol:"bittorrent", outbound:"block"}], auto_detect_interface:true},
         inbounds:$inbounds,
         outbounds:[{type:"direct", tag:"direct"}, {type:"block", tag:"block"}]
@@ -1435,7 +1435,7 @@ deploy_official_hy2() {
     if [[ "$IS_SILENT" != 'SILENT' ]]; then
         clear; msg "${BOLD}${GREEN}部署官方 Hysteria 2${NC}"
         init_system_environment
-        source "$AIO_ENV" 2>/dev/null || true
+        source "$ABOX_ENV" 2>/dev/null || true
         release_ports
         clean_nat_rules
         clean_input_rules
@@ -1546,7 +1546,7 @@ deploy_xray() {
     local MODE_IN=$1 KEYPAIR PK_LOCAL
     clear; msg "${BOLD}${GREEN}部署 Xray-core [$MODE_IN]${NC}"
     init_system_environment
-    source "$AIO_ENV" 2>/dev/null || true
+    source "$ABOX_ENV" 2>/dev/null || true
     release_ports
     clean_nat_rules
     clean_input_rules
@@ -1632,7 +1632,7 @@ deploy_singbox() {
     local MODE_IN=$1 KEYPAIR SB_PATH cert_cn='localhost' SB_PRE_START='' SB_POST_STOP='' SB_RC_PRE='' SB_RC_POST=''
     clear; msg "${BOLD}${GREEN}部署 Sing-box 核心 [$MODE_IN]${NC}"
     init_system_environment
-    source "$AIO_ENV" 2>/dev/null || true
+    source "$ABOX_ENV" 2>/dev/null || true
     release_ports
     clean_nat_rules
     clean_input_rules
@@ -1677,25 +1677,25 @@ deploy_singbox() {
     /usr/local/bin/sing-box check -c /etc/sing-box/config.json >/dev/null 2>&1 || die 'Sing-box 配置校验失败。'
 
     if [[ "$MODE_IN" == *'HY2'* || "$MODE_IN" == *'ALL'* ]] && [[ "${HY2_HOP:-}" == 'true' ]]; then
-        SB_PRE_START="ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'
-ExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
-        SB_POST_STOP="ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
+        SB_PRE_START="ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
+        SB_POST_STOP="ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
         SB_RC_PRE="start_pre() {
-  $IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true
-  $IPT -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true"
+  $IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true
+  $IPT -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true"
         SB_RC_POST="stop_post() {
-  $IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true"
+  $IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true"
         if has_ipv6 && ipv6_nat_redirect_usable; then
             SB_PRE_START+="
-ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'
-ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
+ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'
+ExecStartPre=-/bin/sh -c '$IPT6 -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
             SB_POST_STOP+="
-ExecStopPost=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
+ExecStopPost=-/bin/sh -c '$IPT6 -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
             SB_RC_PRE+="
-  $IPT6 -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true
-  $IPT6 -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true"
+  $IPT6 -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true
+  $IPT6 -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true"
             SB_RC_POST+="
-  $IPT6 -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"Aio-box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true"
+  $IPT6 -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-BOX-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true"
         fi
         SB_RC_PRE+="
   return 0
@@ -1764,8 +1764,8 @@ get_month_total_bytes() {
 bytes_to_gb() { awk -v b="$1" 'BEGIN { printf "%.2f", b / 1024 / 1024 / 1024 }'; }
 
 setup_traffic_monitor() {
-    mkdir -p "$AIO_DIR"
-    cat > "$AIO_DIR/traffic_monitor.sh" <<'EOF_TRAFFIC'
+    mkdir -p "$ABOX_DIR"
+    cat > "$ABOX_DIR/traffic_monitor.sh" <<'EOF_TRAFFIC'
 #!/usr/bin/env bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 source /etc/ddr/.env 2>/dev/null || exit 0
@@ -1800,7 +1800,7 @@ if (( $(echo "$USED_GB >= $TRAFFIC_LIMIT_GB" | bc -l) )); then
     killall -9 hysteria xray sing-box 2>/dev/null || true
 fi
 EOF_TRAFFIC
-    chmod +x "$AIO_DIR/traffic_monitor.sh"
+    chmod +x "$ABOX_DIR/traffic_monitor.sh"
     local tmp_cron
     tmp_cron=$(mktemp)
     crontab -l 2>/dev/null | grep -vE '^no crontab for|^#' | grep -v '/etc/ddr/traffic_monitor.sh' > "$tmp_cron" || true
@@ -1814,7 +1814,7 @@ disable_traffic_monitor() {
     tmp_cron=$(mktemp)
     crontab -l 2>/dev/null | grep -vE '^no crontab for|^#' | grep -v '/etc/ddr/traffic_monitor.sh' > "$tmp_cron" || true
     crontab "$tmp_cron" 2>/dev/null || true
-    rm -f "$tmp_cron" "$AIO_DIR/traffic_monitor.sh"
+    rm -f "$tmp_cron" "$ABOX_DIR/traffic_monitor.sh"
 }
 
 traffic_management_menu() {
@@ -1828,7 +1828,7 @@ traffic_management_menu() {
     if command -v vnstat >/dev/null 2>&1; then
         vnstat -i "$INTERFACE" -m 2>/dev/null | head -n 8 | grep -v '^$' || msg "${YELLOW}暂无本月统计数据，vnstat 正在收集中。${NC}"
     fi
-    source "$AIO_ENV" 2>/dev/null || true
+    source "$ABOX_ENV" 2>/dev/null || true
     if [[ -n "${TRAFFIC_LIMIT_GB:-}" ]]; then
         msg "当前设定: ${GREEN}${TRAFFIC_LIMIT_GB} GB${NC} | 模式: ${TRAFFIC_LIMIT_MODE:-total}"
     else
@@ -1846,18 +1846,18 @@ traffic_management_menu() {
             read -r -ep '计量模式 total/rx/tx (回车默认 total): ' mode_choice
             mode_choice=${mode_choice:-total}
             [[ "$mode_choice" =~ ^(total|rx|tx)$ ]] || { msg "${RED}[!] 计量模式无效。${NC}"; pause_return; return; }
-            touch "$AIO_ENV"
-            sed -i '/^TRAFFIC_LIMIT_GB=/d;/^TRAFFIC_LIMIT_MODE=/d' "$AIO_ENV" 2>/dev/null || true
-            printf 'TRAFFIC_LIMIT_GB=%q\nTRAFFIC_LIMIT_MODE=%q\n' "$limit_gb" "$mode_choice" >> "$AIO_ENV"
-            chmod 600 "$AIO_ENV"
+            touch "$ABOX_ENV"
+            sed -i '/^TRAFFIC_LIMIT_GB=/d;/^TRAFFIC_LIMIT_MODE=/d' "$ABOX_ENV" 2>/dev/null || true
+            printf 'TRAFFIC_LIMIT_GB=%q\nTRAFFIC_LIMIT_MODE=%q\n' "$limit_gb" "$mode_choice" >> "$ABOX_ENV"
+            chmod 600 "$ABOX_ENV"
             setup_traffic_monitor
             msg "${GREEN}流量限制已设定为 ${limit_gb} GB，模式 ${mode_choice}。${NC}"
             pause_return
             ;;
         2)
-            [[ -f "$AIO_ENV" ]] && sed -i '/^TRAFFIC_LIMIT_GB=/d;/^TRAFFIC_LIMIT_MODE=/d' "$AIO_ENV" 2>/dev/null || true
+            [[ -f "$ABOX_ENV" ]] && sed -i '/^TRAFFIC_LIMIT_GB=/d;/^TRAFFIC_LIMIT_MODE=/d' "$ABOX_ENV" 2>/dev/null || true
             disable_traffic_monitor
-            source "$AIO_ENV" 2>/dev/null || true
+            source "$ABOX_ENV" 2>/dev/null || true
             case "${CORE:-}" in
                 xray) service_manager start xray ;;
                 singbox) service_manager start sing-box ;;
@@ -1873,7 +1873,7 @@ traffic_management_menu() {
 
 manage_ss_whitelist() {
     clear
-    source "$AIO_ENV" 2>/dev/null || true
+    source "$ABOX_ENV" 2>/dev/null || true
     [[ -z "${SS_PORT:-}" ]] && { msg "${RED}[!] 未检测到已部署的 SS-2022 服务端口。${NC}"; pause_return; return; }
     msg "${CYAN}======================================================================${NC}"
     msg "${BOLD}${GREEN}SS-2022 白名单 IP 管理 / SS-2022 Whitelist Manager${NC}"
@@ -1901,12 +1901,12 @@ manage_ss_whitelist() {
                 valid_ipv6_cidr "$add_ip" || { msg "${RED}[!] IPv6 白名单地址非法: $add_ip${NC}"; pause_return; return; }
                 has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1 || die '系统无可用 IPv6 防火墙。'
                 for proto in tcp udp; do
-                    $IPT6 -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$add_ip" -m comment --comment "Aio-box-${SS_PORT}-${proto}-WL6" -j ACCEPT >/dev/null 2>&1 || die "IPv6 白名单规则写入失败: $add_ip/$proto"
+                    $IPT6 -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$add_ip" -m comment --comment "A-BOX-${SS_PORT}-${proto}-WL6" -j ACCEPT >/dev/null 2>&1 || die "IPv6 白名单规则写入失败: $add_ip/$proto"
                 done
             else
                 valid_ipv4_cidr "$add_ip" || { msg "${RED}[!] IPv4 白名单地址非法: $add_ip${NC}"; pause_return; return; }
                 for proto in tcp udp; do
-                    $IPT -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$add_ip" -m comment --comment "Aio-box-${SS_PORT}-${proto}-WL" -j ACCEPT >/dev/null 2>&1 || die "IPv4 白名单规则写入失败: $add_ip/$proto"
+                    $IPT -w -I INPUT -p "$proto" --dport "$SS_PORT" -s "$add_ip" -m comment --comment "A-BOX-${SS_PORT}-${proto}-WL" -j ACCEPT >/dev/null 2>&1 || die "IPv4 白名单规则写入失败: $add_ip/$proto"
                 done
             fi
             save_firewall_rules
@@ -1920,8 +1920,8 @@ manage_ss_whitelist() {
             if [[ "$del_ip" == *:* ]]; then
                 valid_ipv6_cidr "$del_ip" || { msg "${RED}[!] IPv6 白名单地址非法: $del_ip${NC}"; pause_return; return; }
                 for proto in tcp udp; do
-                    while $IPT6 -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-${proto}-WL6" | grep -Fq -- "$del_ip"; do
-                        rule=$($IPT6 -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-${proto}-WL6" | grep -F -- "$del_ip" | head -n 1 | sed 's/^-A /-D /')
+                    while $IPT6 -w -S INPUT 2>/dev/null | grep -F "A-BOX-${SS_PORT}-${proto}-WL6" | grep -Fq -- "$del_ip"; do
+                        rule=$($IPT6 -w -S INPUT 2>/dev/null | grep -F "A-BOX-${SS_PORT}-${proto}-WL6" | grep -F -- "$del_ip" | head -n 1 | sed 's/^-A /-D /')
                         [[ -z "$rule" ]] && break
                         # shellcheck disable=SC2086
                         $IPT6 -w $rule >/dev/null 2>&1 || die "IPv6 白名单规则删除失败: $del_ip/$proto"
@@ -1931,8 +1931,8 @@ manage_ss_whitelist() {
             else
                 valid_ipv4_cidr "$del_ip" || { msg "${RED}[!] IPv4 白名单地址非法: $del_ip${NC}"; pause_return; return; }
                 for proto in tcp udp; do
-                    while $IPT -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-${proto}-WL" | grep -Fq -- "$del_ip"; do
-                        rule=$($IPT -w -S INPUT 2>/dev/null | grep -F "Aio-box-${SS_PORT}-${proto}-WL" | grep -F -- "$del_ip" | head -n 1 | sed 's/^-A /-D /')
+                    while $IPT -w -S INPUT 2>/dev/null | grep -F "A-BOX-${SS_PORT}-${proto}-WL" | grep -Fq -- "$del_ip"; do
+                        rule=$($IPT -w -S INPUT 2>/dev/null | grep -F "A-BOX-${SS_PORT}-${proto}-WL" | grep -F -- "$del_ip" | head -n 1 | sed 's/^-A /-D /')
                         [[ -z "$rule" ]] && break
                         # shellcheck disable=SC2086
                         $IPT -w $rule >/dev/null 2>&1 || die "IPv4 白名单规则删除失败: $del_ip/$proto"
@@ -1947,11 +1947,11 @@ manage_ss_whitelist() {
         3)
             for proto in tcp udp; do
                 if ! $IPT -w -C INPUT -p "$proto" --dport "$SS_PORT" -j DROP 2>/dev/null; then
-                    $IPT -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-${proto}-DROP" -j DROP >/dev/null 2>&1 || die "IPv4 SS DROP 规则写入失败: $proto"
+                    $IPT -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "A-BOX-${SS_PORT}-${proto}-DROP" -j DROP >/dev/null 2>&1 || die "IPv4 SS DROP 规则写入失败: $proto"
                 fi
                 if has_ipv6 && command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
                     if ! $IPT6 -w -C INPUT -p "$proto" --dport "$SS_PORT" -j DROP 2>/dev/null; then
-                        $IPT6 -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "Aio-box-${SS_PORT}-${proto}-DROP6" -j DROP >/dev/null 2>&1 || die "IPv6 SS DROP 规则写入失败: $proto"
+                        $IPT6 -w -A INPUT -p "$proto" --dport "$SS_PORT" -m comment --comment "A-BOX-${SS_PORT}-${proto}-DROP6" -j DROP >/dev/null 2>&1 || die "IPv6 SS DROP 规则写入失败: $proto"
                     fi
                 fi
             done
@@ -1961,15 +1961,15 @@ manage_ss_whitelist() {
             ;;
         4)
             for proto in tcp udp; do
-                while $IPT -w -S INPUT 2>/dev/null | grep -q "Aio-box-${SS_PORT}-${proto}-DROP"; do
-                    rule=$($IPT -w -S INPUT 2>/dev/null | grep "Aio-box-${SS_PORT}-${proto}-DROP" | head -n 1 | sed 's/^-A /-D /')
+                while $IPT -w -S INPUT 2>/dev/null | grep -q "A-BOX-${SS_PORT}-${proto}-DROP"; do
+                    rule=$($IPT -w -S INPUT 2>/dev/null | grep "A-BOX-${SS_PORT}-${proto}-DROP" | head -n 1 | sed 's/^-A /-D /')
                     [[ -z "$rule" ]] && break
                     # shellcheck disable=SC2086
                     $IPT -w $rule >/dev/null 2>&1 || break
                 done
                 if command -v ip6tables >/dev/null 2>&1 && $IPT6 -w -S INPUT >/dev/null 2>&1; then
-                    while $IPT6 -w -S INPUT 2>/dev/null | grep -q "Aio-box-${SS_PORT}-${proto}-DROP6"; do
-                        rule=$($IPT6 -w -S INPUT 2>/dev/null | grep "Aio-box-${SS_PORT}-${proto}-DROP6" | head -n 1 | sed 's/^-A /-D /')
+                    while $IPT6 -w -S INPUT 2>/dev/null | grep -q "A-BOX-${SS_PORT}-${proto}-DROP6"; do
+                        rule=$($IPT6 -w -S INPUT 2>/dev/null | grep "A-BOX-${SS_PORT}-${proto}-DROP6" | head -n 1 | sed 's/^-A /-D /')
                         [[ -z "$rule" ]] && break
                         # shellcheck disable=SC2086
                         $IPT6 -w $rule >/dev/null 2>&1 || break
@@ -1998,14 +1998,14 @@ do_cleanup() {
     rm -rf /usr/local/etc/xray /usr/local/share/xray /etc/sing-box /etc/hysteria /usr/local/bin/xray /usr/local/bin/sing-box /usr/local/bin/hysteria
     rm -f /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/hysteria.service
     rm -f /etc/init.d/xray /etc/init.d/sing-box /etc/init.d/hysteria
-    rm -f /etc/sysctl.d/99-aio-box-tune.conf /etc/security/limits.d/aio-box.conf
+    rm -f /etc/sysctl.d/99-A-BOX-tune.conf /etc/security/limits.d/A-BOX.conf
     sysctl --system >/dev/null 2>&1 || true
     local tmp_cron
     tmp_cron=$(mktemp)
     crontab -l 2>/dev/null | grep -vE '^no crontab for|^#' | grep -vE '/etc/ddr/traffic_monitor.sh|/etc/ddr/geo_update.sh|/etc/ddr/socket_probe.sh' > "$tmp_cron" || true
     crontab "$tmp_cron" 2>/dev/null || true
     rm -f "$tmp_cron"
-    rm -f /var/log/aio-box-*.log /etc/fail2ban/jail.d/aio-box.local /etc/fail2ban/filter.d/aio-box.conf /etc/logrotate.d/aio-box 2>/dev/null || true
+    rm -f /var/log/A-BOX-*.log /etc/fail2ban/jail.d/A-BOX.local /etc/fail2ban/filter.d/A-BOX.conf /etc/logrotate.d/A-BOX 2>/dev/null || true
     if [[ "$INIT_SYS" == 'systemd' ]]; then
         systemctl restart fail2ban 2>/dev/null || true
         systemctl daemon-reload 2>/dev/null || true
@@ -2013,11 +2013,11 @@ do_cleanup() {
         rc-service fail2ban restart 2>/dev/null || true
     fi
     if [[ "${1:-}" == 'full' ]]; then
-        rm -rf "$AIO_DIR" /usr/local/bin/sb
+        rm -rf "$ABOX_DIR" /usr/local/bin/sb
         msg "${GREEN}完全清理完成。${NC}"
         exit 0
     else
-        rm -f "$AIO_ENV" "$AIO_DIR"/.deps* "$AIO_DIR/traffic_monitor.sh" "$AIO_DIR/geo_update.sh" "$AIO_DIR/socket_probe.sh"
+        rm -f "$ABOX_ENV" "$ABOX_DIR"/.deps* "$ABOX_DIR/traffic_monitor.sh" "$ABOX_DIR/geo_update.sh" "$ABOX_DIR/socket_probe.sh"
         setup_shortcut
         msg "${GREEN}代理系统已销毁，保留 sb 入口。${NC}"
         pause_return
@@ -2042,10 +2042,10 @@ check_virgin_state() {
     crontab -l 2>/dev/null | grep -vE '^no crontab for|^#' | grep -vE '/etc/ddr/traffic_monitor.sh|/etc/ddr/geo_update.sh|/etc/ddr/socket_probe.sh' > "$tmp_cron" || true
     crontab "$tmp_cron" 2>/dev/null || true
     rm -f "$tmp_cron"
-    rm -f "$AIO_ENV" "$AIO_DIR"/.deps* "$AIO_DIR/traffic_monitor.sh" "$AIO_DIR/geo_update.sh" "$AIO_DIR/socket_probe.sh"
+    rm -f "$ABOX_ENV" "$ABOX_DIR"/.deps* "$ABOX_DIR/traffic_monitor.sh" "$ABOX_DIR/geo_update.sh" "$ABOX_DIR/socket_probe.sh"
     rm -rf /usr/local/etc/xray /usr/local/share/xray /etc/sing-box /etc/hysteria /usr/local/bin/xray /usr/local/bin/sing-box /usr/local/bin/hysteria
     rm -f /etc/systemd/system/xray.service /etc/systemd/system/sing-box.service /etc/systemd/system/hysteria.service /etc/init.d/xray /etc/init.d/sing-box /etc/init.d/hysteria
-    rm -f /var/log/aio-box-*.log /etc/fail2ban/jail.d/aio-box.local /etc/fail2ban/filter.d/aio-box.conf /etc/logrotate.d/aio-box 2>/dev/null || true
+    rm -f /var/log/A-BOX-*.log /etc/fail2ban/jail.d/A-BOX.local /etc/fail2ban/filter.d/A-BOX.conf /etc/logrotate.d/A-BOX 2>/dev/null || true
     [[ "$INIT_SYS" == 'systemd' ]] && systemctl daemon-reload 2>/dev/null || true
     msg "${GREEN}环境初始化完成。${NC}"
     pause_return
@@ -2053,7 +2053,7 @@ check_virgin_state() {
 
 tune_vps() {
     clear; msg "${CYAN}正在开启底层系统优化 (TCP-BBR & I/O Limit Control)...${NC}"
-    cat > /etc/security/limits.d/aio-box.conf <<'EOF_LIMITS'
+    cat > /etc/security/limits.d/A-BOX.conf <<'EOF_LIMITS'
 * soft nofile 1048576
 * hard nofile 1048576
 * soft nproc 1048576
@@ -2062,7 +2062,7 @@ root soft nofile 1048576
 root hard nofile 1048576
 EOF_LIMITS
     modprobe tcp_bbr 2>/dev/null || true
-    cat > /etc/sysctl.d/99-aio-box-tune.conf <<'EOF_SYSCTL'
+    cat > /etc/sysctl.d/99-A-BOX-tune.conf <<'EOF_SYSCTL'
 fs.file-max = 1048576
 fs.inotify.max_user_instances = 8192
 net.ipv4.ip_forward = 1
@@ -2147,7 +2147,7 @@ vps_benchmark_menu() {
     msg "${CYAN}======================================================================${NC}"
     msg "${BOLD}${GREEN}$(tr_msg toolbox_title)${NC}"
     msg "${CYAN}======================================================================${NC}"
-    if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+    if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
         msg "${YELLOW}1. System benchmark and download speed (bench.sh)${NC}"
         msg "${YELLOW}2. IP quality, streaming unlock and route test (Check.Place)${NC}"
         msg "${YELLOW}3. Local SNI preference test: 100 global whitelist domains${NC}"
@@ -2208,8 +2208,8 @@ generate_qr() {
 view_config() {
     local CALLER=${1:-manual}
     clear
-    [[ ! -f "$AIO_ENV" ]] && { msg "${RED}未检测到持久化配置变量。${NC}"; sleep 2; return 0; }
-    source "$AIO_ENV"
+    [[ ! -f "$ABOX_ENV" ]] && { msg "${RED}未检测到持久化配置变量。${NC}"; sleep 2; return 0; }
+    source "$ABOX_ENV"
     VISION_SNI=${VISION_SNI:-${VLESS_SNI:-}}
     XHTTP_SNI=${XHTTP_SNI:-${VLESS_SNI:-}}
     local F_IP="$LINK_IP" S_IP SS_BASE64 VLESS_URL XHTTP_URL HY2_URL SS_URL
@@ -2222,22 +2222,22 @@ view_config() {
     msg "${BLUE}----------------------------------------------------------------------${NC}"
     msg "${YELLOW}[ 通用分享 URI / General URIs ]${NC}"
     if [[ "$MODE" == *'VISION'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
-        VLESS_URL="vless://$UUID@$F_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VISION_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#Aio-VLESS-Vision"
+        VLESS_URL="vless://$UUID@$F_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VISION_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#A-BOX-VLESS-Vision"
         msg "${GREEN}${VLESS_URL}${NC}"
         generate_qr "$VLESS_URL"
     fi
     if [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]]; then
-        XHTTP_URL="vless://$UUID@$F_IP:$XHTTP_PORT?encryption=none&security=reality&sni=$XHTTP_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=xhttp&path=%2Fxhttp&mode=stream-one#Aio-VLESS-XHTTP"
+        XHTTP_URL="vless://$UUID@$F_IP:$XHTTP_PORT?encryption=none&security=reality&sni=$XHTTP_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=xhttp&path=%2Fxhttp&mode=stream-one#A-BOX-VLESS-XHTTP"
         msg "${GREEN}${XHTTP_URL}${NC}"
         generate_qr "$XHTTP_URL"
     fi
     if [[ "$MODE" == *'HY2'* || "$MODE" == *'ALL'* ]]; then
         if [[ -n "${HY2_DOMAIN:-}" && "$CORE" != 'singbox' ]]; then
-            HY2_URL="hysteria2://$HY2_PASS@$HY2_DOMAIN:$HY2_URI_PORTS/?sni=$HY2_DOMAIN&obfs=salamander&obfs-password=$HY2_OBFS#Aio-Hy2-ACME"
+            HY2_URL="hysteria2://$HY2_PASS@$HY2_DOMAIN:$HY2_URI_PORTS/?sni=$HY2_DOMAIN&obfs=salamander&obfs-password=$HY2_OBFS#A-BOX-Hy2-ACME"
         else
             S_IP="$F_IP"
             [[ -n "${HY2_DOMAIN:-}" ]] && S_IP="$HY2_DOMAIN"
-            HY2_URL="hysteria2://$HY2_PASS@$S_IP:$HY2_URI_PORTS/?insecure=1&pinSHA256=$HY2_CERT_SHA256_FP&obfs=salamander&obfs-password=$HY2_OBFS#Aio-Hy2-Self"
+            HY2_URL="hysteria2://$HY2_PASS@$S_IP:$HY2_URI_PORTS/?insecure=1&pinSHA256=$HY2_CERT_SHA256_FP&obfs=salamander&obfs-password=$HY2_OBFS#A-BOX-Hy2-Self"
         fi
         msg "${GREEN}${HY2_URL}${NC}"
         [[ "${HY2_HOP:-}" == 'true' ]] && msg "${YELLOW}端口跳跃默认间隔 30s；不建议低于 5s。${NC}"
@@ -2245,7 +2245,7 @@ view_config() {
     fi
     if [[ "$MODE" == *'SS'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
         SS_BASE64=$(printf '%s' "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 -w 0 2>/dev/null || printf '%s' "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 | tr -d '\n')
-        SS_URL="ss://${SS_BASE64}@$F_IP:$SS_PORT#Aio-SS"
+        SS_URL="ss://${SS_BASE64}@$F_IP:$SS_PORT#A-BOX-SS"
         msg "${GREEN}${SS_URL}${NC}"
         generate_qr "$SS_URL"
     fi
@@ -2255,7 +2255,7 @@ view_config() {
     msg "${YELLOW}[ Clash Meta / Mihomo 示例 ]${NC}"
     if [[ "$MODE" == *'VISION'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
         cat <<EOF_CM
-  - name: "Aio-VLESS-Vision"
+  - name: "A-BOX-VLESS-Vision"
     type: vless
     server: $LINK_IP
     port: $VLESS_PORT
@@ -2277,7 +2277,7 @@ EOF_CM
     fi
     if [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]]; then
         cat <<EOF_CM
-  - name: "Aio-VLESS-XHTTP"
+  - name: "A-BOX-VLESS-XHTTP"
     type: vless
     server: $LINK_IP
     port: $XHTTP_PORT
@@ -2306,7 +2306,7 @@ EOF_CM
         if [[ -n "${HY2_DOMAIN:-}" && "$CORE" != 'singbox' ]]; then
             if [[ "${HY2_HOP:-}" == 'true' ]]; then
                 cat <<EOF_CM
-  - name: "Aio-Hy2-ACME"
+  - name: "A-BOX-Hy2-ACME"
     type: hysteria2
     server: $HY2_DOMAIN
     ports: ${HY2_CLASH_PORTS}
@@ -2319,7 +2319,7 @@ EOF_CM
 EOF_CM
             else
                 cat <<EOF_CM
-  - name: "Aio-Hy2-ACME"
+  - name: "A-BOX-Hy2-ACME"
     type: hysteria2
     server: $HY2_DOMAIN
     port: $HY2_BASE_PORT
@@ -2333,7 +2333,7 @@ EOF_CM
         else
             if [[ "${HY2_HOP:-}" == 'true' ]]; then
                 cat <<EOF_CM
-  - name: "Aio-Hy2-Self"
+  - name: "A-BOX-Hy2-Self"
     type: hysteria2
     server: $S_IP
     ports: ${HY2_CLASH_PORTS}
@@ -2347,7 +2347,7 @@ EOF_CM
 EOF_CM
             else
                 cat <<EOF_CM
-  - name: "Aio-Hy2-Self"
+  - name: "A-BOX-Hy2-Self"
     type: hysteria2
     server: $S_IP
     port: $HY2_BASE_PORT
@@ -2363,7 +2363,7 @@ EOF_CM
     fi
     if [[ "$MODE" == *'SS'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
         cat <<EOF_CM
-  - name: "Aio-SS"
+  - name: "A-BOX-SS"
     type: ss
     server: $LINK_IP
     port: $SS_PORT
@@ -2434,7 +2434,7 @@ EOF_SB
         cat <<EOF_V2N
 {
   "v": "2",
-  "ps": "Aio-VLESS-XHTTP",
+  "ps": "A-BOX-VLESS-XHTTP",
   "add": "$LINK_IP",
   "port": "$XHTTP_PORT",
   "id": "$UUID",
@@ -2458,9 +2458,9 @@ EOF_V2N
 show_usage() {
     clear
     msg "${CYAN}======================================================================${NC}"
-    msg "${BOLD}${GREEN}Aio-box 脚本全功能说明书 / Full Manual${NC}"
+    msg "${BOLD}${GREEN}A-BOX 脚本全功能说明书 / Full Manual${NC}"
     msg "${CYAN}======================================================================${NC}"
-    if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+    if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
         cat <<'EOF_USAGE'
 [Deployment]
 1  Xray VLESS-Vision-Reality
@@ -2494,7 +2494,7 @@ show_usage() {
 14 Manual
    This page.
 15 OTA & Geo Update
-   Update Aio-box script and Loyalsoldier geoip/geosite data.
+   Update A-BOX script and Loyalsoldier geoip/geosite data.
 16 Full/Partial Uninstall
    Remove proxy stack, firewall rules, services and optional sb shortcut.
 17 Environment Reset
@@ -2540,7 +2540,7 @@ EOF_USAGE
 14 脚本说明书
    当前页面。
 15 脚本 OTA 升级与 Geo 资源更新
-   更新 Aio-box 主脚本和 Loyalsoldier geoip/geosite 数据。
+   更新 A-BOX 主脚本和 Loyalsoldier geoip/geosite 数据。
 16 一键全部清空卸载
    删除代理栈、服务、防火墙规则，可选择是否保留 sb 快捷入口。
 17 删除全部节点与环境初始化
@@ -2559,15 +2559,15 @@ EOF_USAGE
 
 update_script() {
     clear
-    local OTA_URL='https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh'
+    local OTA_URL='https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh'
     msg "${YELLOW}[*] 正在同步远端源码...${NC}"
-    if curl -fLs --connect-timeout 10 "$OTA_URL" -o /tmp/aio_update.sh; then
-        if bash -n /tmp/aio_update.sh && grep -q '==============================Aio-box===============================' /tmp/aio_update.sh; then
-            mv /tmp/aio_update.sh "$AIO_DIR/aio.sh"
-            chmod +x "$AIO_DIR/aio.sh"
+    if curl -fLs --connect-timeout 10 "$OTA_URL" -o /tmp/A-BOX_update.sh; then
+        if bash -n /tmp/A-BOX_update.sh && grep -q '==============================A-BOX===============================' /tmp/A-BOX_update.sh; then
+            mv /tmp/A-BOX_update.sh "$ABOX_DIR/A-BOX.sh"
+            chmod +x "$ABOX_DIR/A-BOX.sh"
             msg "${GREEN}核心代码热更新完毕。${NC}"
             sleep 2
-            exec "$AIO_DIR/aio.sh"
+            exec "$ABOX_DIR/A-BOX.sh"
         else
             msg "${RED}[!] 更新脚本语法错误或指纹校验失败。${NC}"
         fi
@@ -2579,9 +2579,9 @@ update_script() {
 
 force_update_geo() {
     clear
-    [[ -x "$AIO_DIR/geo_update.sh" ]] || setup_geo_cron
+    [[ -x "$ABOX_DIR/geo_update.sh" ]] || setup_geo_cron
     msg "${YELLOW}[*] 正在拉取 Loyalsoldier Geo 资源并执行校验...${NC}"
-    if bash "$AIO_DIR/geo_update.sh"; then
+    if bash "$ABOX_DIR/geo_update.sh"; then
         msg "${GREEN}Geo 资源更新与校验成功。${NC}"
     else
         msg "${RED}[!] Geo 资源下载失败或校验未通过。${NC}"
@@ -2594,7 +2594,7 @@ ota_and_geo_menu() {
     msg "${CYAN}======================================================================${NC}"
     msg "${BOLD}${GREEN}脚本 OTA 升级与 Geo 资源更新${NC}"
     msg "${CYAN}======================================================================${NC}"
-    msg "${YELLOW}1. 升级 Aio-box 核心脚本${NC}"
+    msg "${YELLOW}1. 升级 A-BOX 核心脚本${NC}"
     msg "${YELLOW}2. 立即拉取并更新 Loyalsoldier Geo 资源${NC}"
     msg "${GREEN}0. 返回主菜单${NC}"
     read -r -ep '请选择 [0-2]: ' ota_choice
@@ -2614,30 +2614,30 @@ enter_runtime() {
         die '非 root 管道/标准输入执行无法自动提权；请使用: curl -fsSL <URL> | sudo bash'
     fi
     need_interactive_tty
-    mkdir -p /var/run "$AIO_DIR"
+    mkdir -p /var/run "$ABOX_DIR"
     detect_lang
     initial_language_select
     exec 9>"$LOCK_FILE"
     if command -v flock >/dev/null 2>&1; then
-        flock -n 9 || die '检测到另一个 Aio-box 实例正在运行。'
+        flock -n 9 || die '检测到另一个 A-BOX 实例正在运行。'
     fi
 }
 
 show_cli_help() {
     cat <<'EOF_HELP'
-Aio-box
+A-BOX
 Usage:
-  bash aio.sh                    启动交互菜单 / Start interactive menu
-  bash aio.sh --lang zh          设置中文并启动 / Use Chinese UI
-  bash aio.sh --lang en          Use English UI / 设置英文并启动
-  bash aio.sh --self-test        运行无副作用静态自测 / Run static self-test
-  bash aio.sh --help             显示命令行帮助 / Show help
+  bash A-BOX.sh                    启动交互菜单 / Start interactive menu
+  bash A-BOX.sh --lang zh          设置中文并启动 / Use Chinese UI
+  bash A-BOX.sh --lang en          Use English UI / 设置英文并启动
+  bash A-BOX.sh --self-test        运行无副作用静态自测 / Run static self-test
+  bash A-BOX.sh --help             显示命令行帮助 / Show help
 EOF_HELP
 }
 
 run_self_tests() {
     local tmp failures=0
-    tmp=$(mktemp -d /tmp/aio-selftest.XXXXXX) || exit 1
+    tmp=$(mktemp -d /tmp/A-BOX-selftest.XXXXXX) || exit 1
     trap 'rm -rf "$tmp"' RETURN
     assert_ok() { "$@" >/dev/null 2>&1 || { echo "FAIL: $*"; failures=$((failures + 1)); }; }
     assert_bad() { "$@" >/dev/null 2>&1 && { echo "FAIL expected bad: $*"; failures=$((failures + 1)); } || true; }
@@ -2702,16 +2702,16 @@ main() {
         --help|-h) show_cli_help; exit 0 ;;
         --self-test) run_self_tests; exit $? ;;
         --lang)
-            AIO_LANG_OVERRIDE="${2:-zh}"
+            ABOX_LANG_OVERRIDE="${2:-zh}"
             enter_runtime "$@"
-            AIO_LANG=$(normalize_lang "$AIO_LANG_OVERRIDE")
+            ABOX_LANG=$(normalize_lang "$ABOX_LANG_OVERRIDE")
             save_lang
             main_loop "$@"
             ;;
         --lang=*)
-            AIO_LANG_OVERRIDE="${1#--lang=}"
+            ABOX_LANG_OVERRIDE="${1#--lang=}"
             enter_runtime "$@"
-            AIO_LANG=$(normalize_lang "$AIO_LANG_OVERRIDE")
+            ABOX_LANG=$(normalize_lang "$ABOX_LANG_OVERRIDE")
             save_lang
             main_loop "$@"
             ;;
@@ -2728,12 +2728,12 @@ main_loop() {
     while true; do
         local STATUS_STR='' CUR_MODE='' choice
         STATUS_STR=$(build_status_str)
-        source "$AIO_ENV" 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=''
+        source "$ABOX_ENV" 2>/dev/null && CUR_MODE="[${CORE}-${MODE}]" || CUR_MODE=''
         clear
         msg "${BLUE}======================================================================${NC}"
-        msg "${BOLD}${YELLOW}==============================Aio-box===============================${NC}"
+        msg "${BOLD}${YELLOW}==============================A-BOX===============================${NC}"
         msg "${BLUE}======================================================================${NC}"
-        if [[ "${AIO_LANG:-zh}" == 'en' ]]; then
+        if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
             msg "Gateway: ${YELLOW}$GLOBAL_PUBLIC_IP${NC} | Core: $STATUS_STR $CUR_MODE"
             msg "${BLUE}----------------------------------------------------------------------${NC}"
             msg "${YELLOW}[ Xray-core Deployment ]${NC}              ${YELLOW}[ Sing-box Deployment ]${NC}"
