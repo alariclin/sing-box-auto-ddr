@@ -6,8 +6,8 @@
 
 [![Version](https://img.shields.io/badge/Version-2026.05.04-success.svg?style=flat-square)]()
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/alariclin/aio-box?style=flat-square&color=yellow)](https://github.com/alariclin/aio-box/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/alariclin/aio-box?style=flat-square&color=orange)](https://github.com/alariclin/aio-box/network/members)
+[![GitHub Stars](https://img.shields.io/github/stars/alariclin/A-BOX?style=flat-square&color=yellow)](https://github.com/alariclin/A-BOX/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/alariclin/A-BOX?style=flat-square&color=orange)](https://github.com/alariclin/A-BOX/network/members)
 
 ---
 
@@ -15,7 +15,7 @@
 
 ## 📖 中文说明
 
-**Aio-box** 是一款面向 Linux 服务器的自动化网络加密隧道部署与运维脚本。当前版本围绕 **Xray-core、sing-box、官方 Hysteria 2** 三类核心构建，提供 VLESS-Reality、VLESS-XHTTP-Reality、Shadowsocks-2022、Hysteria 2、系统调优、流量管控、白名单、防御探针、SNI 优选、Cloudflare WARP、Swap 划拨与中英文界面切换。
+**A-BOX** 是一款面向 Linux 服务器的自动化网络加密隧道部署与运维脚本。当前版本围绕 **Xray-core、sing-box、官方 Hysteria 2** 三类核心构建，提供 VLESS-Reality、VLESS-XHTTP-Reality、Shadowsocks-2022、Hysteria 2、系统调优、流量管控、白名单、防御探针、SNI 优选、Cloudflare WARP、Swap 划拨与中英文界面切换。
 
 > ⚠️ 合规与免责声明：本项目定位为网络架构测试、网络安全研究与个人隐私保护的自动化部署工具。
 > 1. 法律合规性：严禁利用本项目提供的脚本及技术手段从事任何违反所在国家或地区法律法规的活动。用户在使用本工具时，必须确保其行为符合当地电信管理、网络安全及互联网信息服务的相关规定。
@@ -91,26 +91,26 @@
 **全球通道：**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh > aio.sh && sudo bash aio.sh
+curl -fsSL https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh > A-BOX.sh && sudo bash A-BOX.sh
 ```
 
 **镜像通道：**
 
 ```bash
-curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh > aio.sh && sudo bash aio.sh
+curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh > A-BOX.sh && sudo bash A-BOX.sh
 ```
 
 **启动指定语言：**
 
 ```bash
-sudo bash aio.sh --lang zh
-sudo bash aio.sh --lang en
+sudo bash A-BOX.sh --lang zh
+sudo bash A-BOX.sh --lang en
 ```
 
 **静态自测：**
 
 ```bash
-sudo bash aio.sh --self-test
+sudo bash A-BOX.sh --self-test
 ```
 
 安装后离线唤醒：
@@ -127,11 +127,11 @@ sb
 
 | 指令 | 作用 |
 | :--- | :--- |
-| `sb` | 打开 Aio-box 主菜单。 |
-| `bash aio.sh --lang zh` | 使用中文界面启动，并保存语言设置。 |
-| `bash aio.sh --lang en` | 使用英文界面启动，并保存语言设置。 |
-| `bash aio.sh --self-test` | 运行无副作用静态自测。 |
-| `bash aio.sh --help` | 显示命令行帮助。 |
+| `sb` | 打开 A-BOX 主菜单。 |
+| `bash A-BOX.sh --lang zh` | 使用中文界面启动，并保存语言设置。 |
+| `bash A-BOX.sh --lang en` | 使用英文界面启动，并保存语言设置。 |
+| `bash A-BOX.sh --self-test` | 运行无副作用静态自测。 |
+| `bash A-BOX.sh --help` | 显示命令行帮助。 |
 
 ---
 
@@ -155,7 +155,7 @@ sb
 | 12 | VPS 一键优化 | 注入 BBR/FQ、文件句柄、TCP KeepAlive、健康探针、logrotate/fail2ban。 | 部署后执行一次即可。 |
 | 13 | 全部节点参数显示 | 输出 URI、二维码、Clash/Mihomo YAML、sing-box 出站、v2rayN/v2rayNG JSON。 | Clash/Mihomo 通常不能直接扫单条 `vless://` QR，优先复制 YAML 或订阅。 |
 | 14 | 脚本说明书 | 在终端显示完整菜单解释和参数说明。 | 支持中文/英文界面。 |
-| 15 | OTA 与 Geo 更新 | 更新 Aio-box 脚本与 Loyalsoldier `geoip.dat` / `geosite.dat`。 | Geo 每周一 03:00 自动更新。 |
+| 15 | OTA 与 Geo 更新 | 更新 A-BOX 脚本与 Loyalsoldier `geoip.dat` / `geosite.dat`。 | Geo 每周一 03:00 自动更新。 |
 | 16 | 清空卸载 | 删除代理栈、服务、防火墙规则。 | 可选择完全清场或保留 `sb` 入口。 |
 | 17 | 环境初始化 | 清理残留进程、陈旧防火墙规则、破损配置与服务。 | 适合重装前修复环境。 |
 | 18 | 每月流量管控 | 用 vnStat 统计月流量，超过阈值后停止服务。 | 适合有流量配额的云服务器。 |
@@ -195,7 +195,7 @@ sb
 
 ## 🌐 English Description
 
-**Aio-box** is an automated encrypted tunnel deployment and operations script for Linux servers. The current version is built around **Xray-core, sing-box, and official Hysteria 2**, with support for VLESS-Reality, VLESS-XHTTP-Reality, Shadowsocks-2022, Hysteria 2, system tuning, traffic quota control, whitelist management, health probes, SNI benchmarking, Cloudflare WARP, Swap allocation, and Chinese/English UI switching.
+**A-BOX** is an automated encrypted tunnel deployment and operations script for Linux servers. The current version is built around **Xray-core, sing-box, and official Hysteria 2**, with support for VLESS-Reality, VLESS-XHTTP-Reality, Shadowsocks-2022, Hysteria 2, system tuning, traffic quota control, whitelist management, health probes, SNI benchmarking, Cloudflare WARP, Swap allocation, and Chinese/English UI switching.
 
 > ⚠️ Compliance & Disclaimer：This project is positioned as an automated tool for network architecture testing, cybersecurity research, and personal privacy protection.
 
@@ -272,26 +272,26 @@ sb
 **Global channel:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh > aio.sh && sudo bash aio.sh
+curl -fsSL https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh > A-BOX.sh && sudo bash A-BOX.sh
 ```
 
 **Mirror channel:**
 
 ```bash
-curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/aio-box/main/install.sh > aio.sh && sudo bash aio.sh
+curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/A-BOX/main/install.sh > A-BOX.sh && sudo bash A-BOX.sh
 ```
 
 **Start with selected language:**
 
 ```bash
-sudo bash aio.sh --lang zh
-sudo bash aio.sh --lang en
+sudo bash A-BOX.sh --lang zh
+sudo bash A-BOX.sh --lang en
 ```
 
 **Static self-test:**
 
 ```bash
-sudo bash aio.sh --self-test
+sudo bash A-BOX.sh --self-test
 ```
 
 Offline launcher after installation:
@@ -308,11 +308,11 @@ sb
 
 | Command | Purpose |
 | :--- | :--- |
-| `sb` | Open the Aio-box control panel. |
-| `bash aio.sh --lang zh` | Start with Chinese UI and save language preference. |
-| `bash aio.sh --lang en` | Start with English UI and save language preference. |
-| `bash aio.sh --self-test` | Run static self-test without side effects. |
-| `bash aio.sh --help` | Show CLI help. |
+| `sb` | Open the A-BOX control panel. |
+| `bash A-BOX.sh --lang zh` | Start with Chinese UI and save language preference. |
+| `bash A-BOX.sh --lang en` | Start with English UI and save language preference. |
+| `bash A-BOX.sh --self-test` | Run static self-test without side effects. |
+| `bash A-BOX.sh --help` | Show CLI help. |
 
 ---
 
@@ -336,7 +336,7 @@ sb
 | 12 | VPS One-click Optimization | BBR/FQ, file descriptor limits, TCP KeepAlive, health probe, logrotate/fail2ban. | Run once after deployment. |
 | 13 | Display Node Parameters | Print URI, QR, Clash/Mihomo YAML, sing-box outbounds, v2rayN/v2rayNG JSON. | Clash/Mihomo usually needs YAML/subscription rather than a single `vless://` QR. |
 | 14 | Manual | Terminal manual. | Follows selected UI language. |
-| 15 | OTA & Geo Update | Update Aio-box and Loyalsoldier `geoip.dat` / `geosite.dat`. | Geo cron: Monday 03:00. |
+| 15 | OTA & Geo Update | Update A-BOX and Loyalsoldier `geoip.dat` / `geosite.dat`. | Geo cron: Monday 03:00. |
 | 16 | Uninstall | Remove proxy stack, services, and firewall rules. | Full wipe or keep `sb` launcher. |
 | 17 | Environment Reset | Remove orphan processes, stale firewall rules, broken configs, and services. | Use before clean redeployment. |
 | 18 | Monthly Traffic Limit | vnStat-based monthly traffic quota cutoff. | Useful for traffic-limited cloud servers. |
@@ -392,7 +392,7 @@ sb
 
 If you encounter any issues or have suggestions, please join the discussion via:
 
-* **[GitHub Issues](https://github.com/alariclin/aio-box/issues)**: 提交缺陷报告或新功能提议 / Submit bug reports or feature requests.
+* **[GitHub Issues](https://github.com/alariclin/A-BOX/issues)**: 提交缺陷报告或新功能提议 / Submit bug reports or feature requests.
 
 ---
 
