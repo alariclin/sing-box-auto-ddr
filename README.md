@@ -7,12 +7,12 @@
 > Born May 1, 2026
 
 - **[📖 中文说明](#-中文说明) | [🌐 English](#-english)**
-- **Credits:** Thanks to Xray-core, sing-box, Hysteria, and related open-source projects for technical inspiration and ecosystem support. A-BOX is an independent automation toolkit.
+- **Credits:** Thanks to Xray-core, sing-box, Hysteria, and related open-source projects for technical inspiration and ecosystem support. A-Box is an independent automation toolkit.
 
 [![Version](https://img.shields.io/badge/Version-2026.05.04-success.svg?style=flat-square)]()
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/alariclin/A-BOX?style=flat-square&color=yellow)](https://github.com/alariclin/A-BOX/stargazers)
-[![GitHub Forks](https://img.shields.io/github/forks/alariclin/A-BOX?style=flat-square&color=orange)](https://github.com/alariclin/A-BOX/network/members)
+[![GitHub Stars](https://img.shields.io/github/stars/alariclin/a-box?style=flat-square&color=yellow)](https://github.com/alariclin/a-box/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/alariclin/a-box?style=flat-square&color=orange)](https://github.com/alariclin/a-box/network/members)
 
 ---
 
@@ -35,26 +35,26 @@
 全球通道：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > a-box.sh && sudo bash a-box.sh
+curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
 ```
 
 镜像通道：
 
 ```bash
-curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > a-box.sh && sudo bash a-box.sh
+curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
 ```
 
 指定语言启动：
 
 ```bash
-sudo bash a-box.sh --lang zh
-sudo bash a-box.sh --lang en
+sudo bash A-Box.sh --lang zh
+sudo bash A-Box.sh --lang en
 ```
 
 静态自测：
 
 ```bash
-sudo bash a-box.sh --self-test
+sudo bash A-Box.sh --self-test
 ```
 
 安装后打开控制台：
@@ -161,26 +161,26 @@ sb
 ### Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > a-box.sh && sudo bash a-box.sh
+curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
 ```
 
 Mirror:
 
 ```bash
-curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > a-box.sh && sudo bash a-box.sh
+curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
 ```
 
 Language:
 
 ```bash
-sudo bash a-box.sh --lang zh
-sudo bash a-box.sh --lang en
+sudo bash A-Box.sh --lang zh
+sudo bash A-Box.sh --lang en
 ```
 
 Self-test:
 
 ```bash
-sudo bash a-box.sh --self-test
+sudo bash A-Box.sh --self-test
 ```
 
 Launcher after installation:
@@ -223,10 +223,11 @@ sb
 
 ## 🤝 Feedback
 
-- [GitHub Issues](https://github.com/alariclin/A-BOX/issues)
+- [GitHub Issues](https://github.com/alariclin/a-box/issues)
 
 ---
 
 ## 📄 License
 
 This project is licensed under the [Apache License 2.0](LICENSE).
+
