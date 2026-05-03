@@ -35,10 +35,10 @@
 ### ✨ 核心亮点
 
 * **自动化加密隧道部署**: 一键自动化安装 VLESS-Reality、Hysteria 2、Shadowsocks 等主流安全传输协议。支持自定义 SNI 和标准服务端口的物理链路复用与高性能分发。
-* **零信任资产校验体系**: 摒弃非官方镜像源，核心二进制文件强制启用 SHA-256 与 ELF/ZIP 幻数结构强校验，彻底阻断任何形式的供应链投毒攻击。
-* **原生防阻断与端口跳跃**: 深度集成 Reality 架构与 uTLS 指纹模拟。完美融合 Hysteria 2 官方内核级端口跳跃（Port Hopping）与动态 iptables/ip6tables 转发，提升极端网络下的穿透存活率。
+* **零信任资产校验体系**: 摒弃非官方镜像源，核心二进制文件强制启用 SHA-256 与 ELF/ZIP 幻数结构强校验，彻底阻断任何形式的供应链攻击。
+* **原生防阻断与端口跳跃**: 深度集成 Reality 架构与 uTLS 指纹模拟。完美融合 Hysteria 2 官方内核级端口跳跃，提升极端网络下的穿透存活率。
 * **物理内核协议栈调优**: 自动注入并激活 BBR 拥塞控制算法，修复内核级 TCP KeepAlive。将系统 TCP 并发句柄及文件描述符提升至物理极限，彻底释放服务器带宽潜能。
-* **环境自愈**: 依托原子化临时文件（mktemp）与 ss 精确端口抓取，脚本能在不伤及宿主机原有合规业务（如 Nginx/Docker）的前提下，实现精准的死锁清理与服务自愈。
+* **环境自愈**: 依托原子化临时文件 与 ss 精确端口抓取，脚本能在不伤及宿主机原有合规业务的前提下，实现精准的死锁清理与服务自愈。
 * **自动化配额熔断机制**: 依托 vnstat 实时链路流量监控，支持预设月度流量使用阈值。在流量触顶时立刻触发服务原子级熔断保护，防止云服务超支。
 
 ---
@@ -116,12 +116,12 @@ sb
 <a name="-key-features"></a>
 ### ✨ Key Features
 
-* **Automated Encryption Tunnel Deployment**: Automatically install popular secure transmission protocols such as VLESS-Reality, Hysteria 2, and Shadowsocks with a single click. Supports custom SNI and physical link multiplexing of standard server ports.
-* **Zero-Trust Asset Verification**: Abandons unofficial mirror sources. Core binaries forcefully enforce SHA-256 and ELF/ZIP magic number validation, completely blocking supply chain poisoning attacks.
-* **Native Port Hopping & Mimicry**: Deeply integrates Reality architecture with uTLS fingerprint simulation. Perfectly merges Hysteria 2's official native port hopping with dynamic iptables/ip6tables forwarding to enhance survival rates in extreme network conditions.
-* **Physical Kernel Protocol Stack Optimization**: Automatically injects and activates the BBR congestion control algorithm and fixes kernel-level TCP KeepAlive. Pushes the system's TCP concurrent handles and file descriptors to absolute limits.
-* **Isolated L4 Probes & Self-Healing**: Utilizing atomic temporary files (mktemp) and precise port grabbing (ss), the script achieves accurate deadlock clearing without affecting existing legitimate processes (like Nginx/Docker).
-* **Automated Quota Circuit Breaker**: Relying on vnstat's real-time link monitoring, it supports preset monthly traffic thresholds. Triggers an automatic atomic service shutdown when traffic reaches the limit to prevent cloud over-billing.
+* **Automated Encryption Tunnel Deployment**: Automatically install popular secure transmission protocols such as VLESS-Reality, Hysteria 2, and Shadowsocks with a single click. Support custom SNI and the physical link reusing and high-performance distribution of standard service ports.
+* **Zero Trust Asset Verification System**: Abandon unofficial mirror sources. Core binary files are forced to enable SHA-256 and strong verification of ELF/ZIP pseudo-structures, completely blocking any form of supply chain attacks.
+* **Native Anti-Denial of Service and Port Jumping**: Deeply integrate the Reality architecture and uTLS fingerprint simulation. Perfectly integrate the official kernel-level port jumping of Hysteria 2, improving the survival rate in extreme networks.
+* **Physical Kernel Protocol Stack Optimization**: Automatically inject and activate the BBR congestion control algorithm, fix the kernel-level TCP KeepAlive. Raise the system TCP concurrent handles and file descriptors to the physical limit, completely releasing the server bandwidth potential.
+* **Environment Self-Repair**: Rely on atomic temporary files and precise port capture by ss, the script can achieve precise deadlock cleaning and service self-healing without harming the original compliance business of the host machine.
+* **Automated Quota Cutoff Mechanism**: Rely on real-time link traffic monitoring by vnstat, support preset monthly traffic usage thresholds. Immediately trigger atomic-level service cutoff protection when the traffic reaches the limit to prevent cloud service overcharging.
 
 ---
 <a name="-architecture-comparison"></a>
