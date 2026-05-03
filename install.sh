@@ -625,13 +625,18 @@ fetch_github_release() {
 }
 
 fetch_geo_data() {
-    local file_name="$1" official_url="$2" out="/tmp/${file_name}" size
-    rm -f "$out"
+    local file_name official_url out size
+    file_name="${1:-}"
+    official_url="${2:-}"
+    [[ -n "$file_name" && -n "$official_url" ]] || die 'Geo 数据下载参数缺失。'
+    [[ "$file_name" =~ ^[A-Za-z0-9._-]+$ ]] || die "Geo 数据文件名非法: $file_name"
+    out="/tmp/${file_name}"
+    rm -f -- "$out"
     if curl -fLs --connect-timeout 10 -m 90 "$official_url" -o "$out"; then
         size=$(wc -c < "$out" 2>/dev/null | tr -d ' ')
         [[ -n "$size" && "$size" -gt 500000 ]] && return 0
     fi
-    rm -f "$out"
+    rm -f -- "$out"
     die "Geo 数据文件 ${file_name} 下载或校验失败。"
 }
 
@@ -881,13 +886,8 @@ pre_install_setup() {
     local DEF_V_PORT=443 DEF_X_PORT=8443 DEF_H_PORT=443 DEF_S_PORT=24043
     local INPUT_V_SNI INPUT_V_PORT INPUT_X_PORT INPUT_H_PORT INPUT_H_DOMAIN INPUT_H_HOP INPUT_H_DOWN INPUT_H_UP INPUT_H_MASQ INPUT_S_PORT INPUT_SS_WL INPUT_KA ip
 
-    if [[ "$CORE_IN" == 'xray' && "$MODE_IN" == *'ALL'* ]]; then
-        DEF_V_PORT=8443
-        DEF_X_PORT=9443
-    fi
-    if [[ "$CORE_IN" == 'singbox' && "$MODE_IN" == *'ALL'* ]]; then
-        DEF_V_PORT=8443
-    fi
+    # Xray ALL: TCP 443 for VLESS-Vision, TCP 8443 for VLESS-XHTTP, UDP 443 for HY2.
+    # TCP/UDP can share the same numeric port; no need to move VLESS away from 443.
 
     INGRESS_IF=$(get_active_interface)
     [[ -z "$INGRESS_IF" ]] && die '无法识别公网入接口。'
