@@ -2,8 +2,6 @@
 
 <img width="459" height="427" alt="نشان A-Box" src="https://github.com/user-attachments/assets/0a3b2ac1-1d05-4cae-968f-24c2a7bc9953" />
 
-# A-Box
-
 > ابزار یک‌مرحله‌ای درگاه شبکه برای Linux  
 > Born May 1, 2026
 
