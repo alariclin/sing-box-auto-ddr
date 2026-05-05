@@ -881,20 +881,23 @@ write_if_changed() {
 
 setup_shortcut() {
     mkdir -p "$ABOX_DIR"
+    local script_tmp=''
     if [[ "${1:-}" == 'update' ]]; then
-        curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o /tmp/A-Box.sh.tmp || die '快捷入口脚本下载失败。'
-        bash -n /tmp/A-Box.sh.tmp || die '更新脚本语法校验失败。'
-        grep -q '==============================A-Box===============================' /tmp/A-Box.sh.tmp || die '更新脚本文本指纹不匹配。'
-        write_if_changed "$ABOX_DIR/A-Box.sh" /tmp/A-Box.sh.tmp
+        script_tmp=$(mktemp /tmp/A-Box-script.XXXXXX.sh) || die '快捷入口临时脚本创建失败。'
+        curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o "$script_tmp" || { rm -f "$script_tmp"; die '快捷入口脚本下载失败。'; }
+        bash -n "$script_tmp" || { rm -f "$script_tmp"; die '更新脚本语法校验失败。'; }
+        grep -q '==============================A-Box===============================' "$script_tmp" || { rm -f "$script_tmp"; die '更新脚本文本指纹不匹配。'; }
+        write_if_changed "$ABOX_DIR/A-Box.sh" "$script_tmp"
     elif [[ -f "$0" && -r "$0" && "$0" != 'bash' && "$0" != '-bash' ]]; then
         if [[ ! -f "$ABOX_DIR/A-Box.sh" ]] || ! cmp -s "$0" "$ABOX_DIR/A-Box.sh"; then
             cp -f "$0" "$ABOX_DIR/A-Box.sh"
         fi
     elif [[ ! -f "$ABOX_DIR/A-Box.sh" ]]; then
-        curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o /tmp/A-Box.sh.tmp || die '无法从远端创建持久化入口。'
-        bash -n /tmp/A-Box.sh.tmp || die '持久化脚本语法校验失败。'
-        grep -q '==============================A-Box===============================' /tmp/A-Box.sh.tmp || die '持久化脚本文本指纹不匹配。'
-        write_if_changed "$ABOX_DIR/A-Box.sh" /tmp/A-Box.sh.tmp
+        script_tmp=$(mktemp /tmp/A-Box-script.XXXXXX.sh) || die '持久化入口临时脚本创建失败。'
+        curl -fLs --connect-timeout 10 "$SCRIPT_URL" -o "$script_tmp" || { rm -f "$script_tmp"; die '无法从远端创建持久化入口。'; }
+        bash -n "$script_tmp" || { rm -f "$script_tmp"; die '持久化脚本语法校验失败。'; }
+        grep -q '==============================A-Box===============================' "$script_tmp" || { rm -f "$script_tmp"; die '持久化脚本文本指纹不匹配。'; }
+        write_if_changed "$ABOX_DIR/A-Box.sh" "$script_tmp"
     fi
     chmod +x "$ABOX_DIR/A-Box.sh"
 
@@ -921,13 +924,13 @@ EOS
     fi
 }
 validate_downloaded_asset() {
-    local f="/tmp/$1"
-    [[ -s "$f" ]] || die "下载资产为空: $1"
-    case "$1" in
+    local asset_name="$1" f="${2:-/tmp/$1}"
+    [[ -s "$f" ]] || die "下载资产为空: $asset_name"
+    case "$asset_name" in
         xray_core.zip) unzip -tqq "$f" >/dev/null 2>&1 || die 'Xray 压缩包校验失败。' ;;
         singbox_core.tar.gz) tar -tzf "$f" >/dev/null 2>&1 || die 'Sing-box 压缩包校验失败。' ;;
         hysteria_core) [[ "$(head -c 4 "$f" | od -An -tx1 | tr -d ' \n')" == '7f454c46' ]] || die 'Hysteria 下载结果不是 ELF 可执行文件。' ;;
-        *) die "未定义的下载校验规则: $1" ;;
+        *) die "未定义的下载校验规则: $asset_name" ;;
     esac
 }
 
@@ -955,7 +958,7 @@ valid_github_download_url() {
 }
 
 fetch_github_release() {
-    local repo=$1 output_file=$2 api_url asset_re release_json asset_json download_url digest mirror tmp_file
+    local repo=$1 output_file=$2 dest_file="${3:-}" api_url asset_re release_json asset_json download_url digest mirror tmp_file tmp_dir
     api_url="https://api.github.com/repos/${repo}/releases/latest"
     case "${repo}:${output_file}" in
         XTLS/Xray-core:xray_core.zip) asset_re="^Xray-linux-${XRAY_ARCH//+/\\+}\\.zip$" ;;
@@ -977,13 +980,21 @@ fetch_github_release() {
     digest=$(jq -r '.digest // ""' <<< "$asset_json")
     valid_github_download_url "$repo" "$download_url" || die 'GitHub Release 下载地址域名/仓库不匹配。'
 
-    tmp_file="/tmp/${output_file}.download.$$"
-    rm -f "$tmp_file" "/tmp/${output_file}"
+    if [[ -z "$dest_file" ]]; then
+        tmp_dir=$(mktemp -d /tmp/A-Box-asset.XXXXXX) || die '核心资产临时目录创建失败。'
+        dest_file="$tmp_dir/$output_file"
+    else
+        mkdir -p "$(dirname "$dest_file")"
+        rm -f -- "$dest_file"
+    fi
+
     for mirror in '' 'https://ghp.ci/' 'https://mirror.ghproxy.com/'; do
+        tmp_file=$(mktemp "${dest_file}.download.XXXXXX") || die '核心资产临时文件创建失败。'
         if curl -fLsS --connect-timeout 10 -m 180 "${mirror}${download_url}" -o "$tmp_file"; then
-            mv -f "$tmp_file" "/tmp/${output_file}"
-            validate_downloaded_asset "$output_file"
-            verify_github_asset_digest "/tmp/${output_file}" "$digest"
+            mv -f "$tmp_file" "$dest_file"
+            validate_downloaded_asset "$output_file" "$dest_file"
+            verify_github_asset_digest "$dest_file" "$digest"
+            FETCHED_ASSET_PATH="$dest_file"
             msg "${GREEN}   核心资产提取成功。${NC}"
             return 0
         fi
@@ -993,18 +1004,24 @@ fetch_github_release() {
 }
 
 fetch_geo_data() {
-    local file_name official_url out size
+    local file_name official_url out tmp_out size
     file_name="${1:-}"
     official_url="${2:-}"
+    out="${3:-}"
     [[ -n "$file_name" && -n "$official_url" ]] || die 'Geo 数据下载参数缺失。'
     [[ "$file_name" =~ ^[A-Za-z0-9._-]+$ ]] || die "Geo 数据文件名非法: $file_name"
-    out="/tmp/${file_name}"
-    rm -f -- "$out"
-    if curl -fLs --connect-timeout 10 -m 90 "$official_url" -o "$out"; then
-        size=$(wc -c < "$out" 2>/dev/null | tr -d ' ')
-        [[ -n "$size" && "$size" -gt 500000 ]] && return 0
+    [[ -n "$out" ]] || out="$(mktemp "/tmp/${file_name}.XXXXXX")"
+    mkdir -p "$(dirname "$out")"
+    tmp_out=$(mktemp "${out}.download.XXXXXX") || die 'Geo 数据临时文件创建失败。'
+    if curl -fLs --connect-timeout 10 -m 90 "$official_url" -o "$tmp_out"; then
+        size=$(wc -c < "$tmp_out" 2>/dev/null | tr -d ' ')
+        if [[ -n "$size" && "$size" -gt 500000 ]]; then
+            mv -f "$tmp_out" "$out"
+            FETCHED_GEO_PATH="$out"
+            return 0
+        fi
     fi
-    rm -f -- "$out"
+    rm -f -- "$tmp_out" "$out"
     die "Geo 数据文件 ${file_name} 下载或校验失败。"
 }
 
@@ -1012,6 +1029,7 @@ reset_protocol_vars() {
     unset UUID VLESS_SNI VISION_SNI XHTTP_SNI VLESS_PORT XHTTP_PORT HY2_BASE_PORT HY2_DOMAIN HY2_UP HY2_DOWN HY2_MASQ_URL
     unset SS_PORT SS_WHITELIST_IP PUBLIC_KEY PBK SHORT_ID HY2_PASS HY2_OBFS SS_PASS
     unset HY2_CERT_SHA256_FP HY2_CERT_PUBKEY_SHA256_B64 HY2_HOP HY2_HOP_IMPL HY2_MONITOR_PORT
+    unset HY2_ACME_TYPE HY2_ACME_DNS_PROVIDER HY2_ACME_DNS_CF_API_TOKEN
     unset HY2_URI_PORTS HY2_CLASH_PORTS HY2_SB_PORTS HY2_RANGE_START HY2_RANGE_END ENABLE_KEEPALIVE
 }
 
@@ -1048,6 +1066,9 @@ write_env() {
         printf 'HY2_HOP=%s\n' "$(shell_quote "${HY2_HOP:-}")"
         printf 'HY2_HOP_IMPL=%s\n' "$(shell_quote "${HY2_HOP_IMPL:-none}")"
         printf 'HY2_MONITOR_PORT=%s\n' "$(shell_quote "${HY2_MONITOR_PORT:-}")"
+        printf 'HY2_ACME_TYPE=%s\n' "$(shell_quote "${HY2_ACME_TYPE:-http}")"
+        printf 'HY2_ACME_DNS_PROVIDER=%s\n' "$(shell_quote "${HY2_ACME_DNS_PROVIDER:-}")"
+        printf 'HY2_ACME_DNS_CF_API_TOKEN=%s\n' "$(shell_quote "${HY2_ACME_DNS_CF_API_TOKEN:-}")"
         printf 'HY2_URI_PORTS=%s\n' "$(shell_quote "${HY2_URI_PORTS:-}")"
         printf 'HY2_CLASH_PORTS=%s\n' "$(shell_quote "${HY2_CLASH_PORTS:-}")"
         printf 'HY2_SB_PORTS=%s\n' "$(shell_quote "${HY2_SB_PORTS:-}")"
@@ -1063,7 +1084,7 @@ write_env() {
 
 setup_active_defense() {
     msg "${YELLOW}[*] 正在挂载环形缓冲日志与 Fail2Ban 主动防御矩阵...${NC}"
-    touch /var/log/A-Box-xray-access.log /var/log/A-Box-xray-error.log /var/log/A-Box-singbox.log 2>/dev/null || true
+    touch /var/log/A-Box-xray-access.log /var/log/A-Box-xray-error.log /var/log/A-Box-singbox.log /var/log/A-Box-hysteria.log 2>/dev/null || true
     chmod 644 /var/log/A-Box-*.log 2>/dev/null || true
     cat > /etc/logrotate.d/A-Box <<'EOF_LOGROTATE'
 /var/log/A-Box-*.log {
@@ -1085,17 +1106,30 @@ failregex = ^.*(?:rejected|invalid request|bad request|authentication failed).* 
             ^.*<HOST>.*(?:rejected|invalid|unauthorized|forbidden).*$
 ignoreregex =
 EOF_F2B_FILTER
-        cat > /etc/fail2ban/jail.d/A-Box.local <<'EOF_F2B_JAIL'
+        local f2b_ports=''
+        [[ -n "${VLESS_PORT:-}" ]] && f2b_ports+="${VLESS_PORT},"
+        [[ -n "${XHTTP_PORT:-}" ]] && f2b_ports+="${XHTTP_PORT},"
+        [[ -n "${HY2_BASE_PORT:-}" ]] && f2b_ports+="${HY2_BASE_PORT},"
+        if [[ "${HY2_HOP:-}" == 'true' && -n "${HY2_RANGE_START:-}" && -n "${HY2_RANGE_END:-}" ]]; then
+            f2b_ports+="${HY2_RANGE_START}:${HY2_RANGE_END},"
+        fi
+        [[ -n "${SS_PORT:-}" ]] && f2b_ports+="${SS_PORT},"
+        f2b_ports="${f2b_ports%,}"
+        [[ -z "$f2b_ports" ]] && f2b_ports='1-65535'
+        cat > /etc/fail2ban/jail.d/A-Box.local <<EOF_F2B_JAIL
 [A-Box]
 enabled = true
-port = 1-65535
+ignoreip = 127.0.0.1/8 ::1
+port = ${f2b_ports}
 filter = A-Box
 logpath = /var/log/A-Box-xray-error.log
           /var/log/A-Box-singbox.log
+          /var/log/A-Box-hysteria.log
 maxretry = 8
 findtime = 120
 bantime = 3600
-action = iptables-allports[name=A-Box]
+action = iptables-multiport[name=A-Box, port="${f2b_ports}", protocol=tcp]
+         iptables-multiport[name=A-Box-udp, port="${f2b_ports}", protocol=udp]
 EOF_F2B_JAIL
         if [[ "$INIT_SYS" == 'systemd' ]]; then
             systemctl restart fail2ban 2>/dev/null || true
@@ -1219,26 +1253,18 @@ fetch_one() {
     return 1
 }
 
-targets=0
-[[ -d '/usr/local/share/xray' ]] && targets=$((targets + 1))
-[[ -d '/etc/sing-box' ]] && targets=$((targets + 1))
-(( targets == 0 )) && exit 0
+[[ -d '/usr/local/share/xray' ]] || exit 0
 
 tmpdir=$(mktemp -d /tmp/A-Box-geo.XXXXXX) || exit 1
 trap 'rm -rf "$tmpdir"' EXIT
 fetch_one "$GEOIP_URL" "$tmpdir/geoip.dat" || exit 1
 fetch_one "$GEOSITE_URL" "$tmpdir/geosite.dat" || exit 1
 
-if [[ -d '/usr/local/share/xray' ]]; then
-    install -m 644 "$tmpdir/geoip.dat" /usr/local/share/xray/geoip.dat
-    install -m 644 "$tmpdir/geosite.dat" /usr/local/share/xray/geosite.dat
-    if command -v systemctl >/dev/null 2>&1; then systemctl restart xray 2>/dev/null || true; else rc-service xray restart 2>/dev/null || true; fi
-fi
-if [[ -d '/etc/sing-box' ]]; then
-    install -m 644 "$tmpdir/geoip.dat" /etc/sing-box/geoip.dat
-    install -m 644 "$tmpdir/geosite.dat" /etc/sing-box/geosite.dat
-    if command -v systemctl >/dev/null 2>&1; then systemctl restart sing-box 2>/dev/null || true; else rc-service sing-box restart 2>/dev/null || true; fi
-fi
+install -m 644 "$tmpdir/geoip.dat" /usr/local/share/xray/geoip.dat
+install -m 644 "$tmpdir/geosite.dat" /usr/local/share/xray/geosite.dat
+if command -v systemctl >/dev/null 2>&1; then systemctl restart xray 2>/dev/null || true; else rc-service xray restart 2>/dev/null || true; fi
+# sing-box GeoIP/Geosite are intentionally not updated here. New sing-box releases removed
+# legacy geoip/geosite support; use rule-set based configs when route databases are needed.
 EOF_GEO
     chmod +x "$ABOX_DIR/geo_update.sh"
     local tmp_cron
@@ -1303,6 +1329,33 @@ pre_install_setup() {
         if [[ -n "$HY2_DOMAIN" ]]; then
             valid_domain "$HY2_DOMAIN" || die "域名格式非法 / Invalid domain: $HY2_DOMAIN"
             [[ "${GLOBAL_PUBLIC_IP:-N/A}" != 'N/A' ]] && verify_domain_points_to_self "$HY2_DOMAIN" "$GLOBAL_PUBLIC_IP"
+            HY2_ACME_TYPE='http'
+            HY2_ACME_DNS_PROVIDER=''
+            HY2_ACME_DNS_CF_API_TOKEN=''
+            if [[ "$CORE_IN" == 'hysteria' || "$MODE_IN" == *'ALL'* ]]; then
+                if [[ -n "${ABOX_HY2_ACME_DNS_PROVIDER:-${ABOX_ACME_DNS_PROVIDER:-}}" ]]; then
+                    HY2_ACME_TYPE='dns'
+                    HY2_ACME_DNS_PROVIDER="${ABOX_HY2_ACME_DNS_PROVIDER:-${ABOX_ACME_DNS_PROVIDER:-}}"
+                    HY2_ACME_DNS_CF_API_TOKEN="${ABOX_HY2_ACME_DNS_CF_API_TOKEN:-${ABOX_ACME_DNS_CF_API_TOKEN:-}}"
+                else
+                    local INPUT_ACME_DNS INPUT_CF_TOKEN
+                    if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
+                        read -r -ep "   ${L_HY2} Use Cloudflare DNS-01 ACME instead of HTTP-01? [Y/N]: " INPUT_ACME_DNS
+                    else
+                        read -r -ep "   ${L_HY2} 是否使用 Cloudflare DNS-01 申请证书以避免占用 80 端口？[Y/N]: " INPUT_ACME_DNS
+                    fi
+                    if is_yes "$INPUT_ACME_DNS"; then
+                        HY2_ACME_TYPE='dns'
+                        HY2_ACME_DNS_PROVIDER='cloudflare'
+                        read -r -sep "   ${L_HY2} Cloudflare API Token: " INPUT_CF_TOKEN; echo
+                        HY2_ACME_DNS_CF_API_TOKEN="$INPUT_CF_TOKEN"
+                    fi
+                fi
+                if [[ "${HY2_ACME_TYPE:-http}" == 'dns' ]]; then
+                    [[ "${HY2_ACME_DNS_PROVIDER:-}" == 'cloudflare' ]] || die '当前仅内置支持 Cloudflare DNS-01 ACME。'
+                    [[ -n "${HY2_ACME_DNS_CF_API_TOKEN:-}" ]] || die 'Cloudflare DNS-01 ACME 需要 API Token。'
+                fi
+            fi
         fi
 
         if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
@@ -1380,11 +1433,19 @@ pre_install_setup() {
     msg "${CYAN}======================================================================${NC}\n"
 
     check_selected_ports_free
+    if [[ "$HAS_HY2" == 'true' && -n "${HY2_DOMAIN:-}" && "${HY2_ACME_TYPE:-http}" == 'http' && ( "$CORE_IN" == 'hysteria' || "$MODE_IN" == *'ALL'* ) ]]; then
+        holder=$(ss -H -n -l -p -A tcp 2>/dev/null | grep -E '[:.]80\b' | grep -vE 'xray|sing-box|hysteria' || true)
+        if [[ -n "$holder" ]]; then
+            msg "${RED}[!] ACME HTTP-01 需要 80/tcp，但该端口已被非 A-Box 进程占用：${NC}"
+            echo "$holder"
+            die '请先释放 80/tcp，或改用 Cloudflare DNS-01 ACME 后再部署 HY2 域名证书。'
+        fi
+    fi
 
     [[ "$HAS_VISION" == 'true' ]] && allowPort "$VLESS_PORT" tcp
     [[ "$HAS_XHTTP" == 'true' ]] && allowPort "$XHTTP_PORT" tcp
     if [[ "$HAS_HY2" == 'true' ]]; then
-        if [[ -n "$HY2_DOMAIN" && ( "$CORE_IN" == 'hysteria' || "$MODE_IN" == *'ALL'* ) ]]; then
+        if [[ -n "$HY2_DOMAIN" && "${HY2_ACME_TYPE:-http}" == 'http' && ( "$CORE_IN" == 'hysteria' || "$MODE_IN" == *'ALL'* ) ]]; then
             allowPort 80 tcp
         fi
         if [[ "$HY2_HOP" == 'true' ]]; then
@@ -1545,7 +1606,7 @@ build_singbox_config() {
     mkdir -p "$(dirname "$out")"
     jq -n --argjson inbounds "$inbounds_json" '{
         log:{level:"warn", output:"/var/log/A-Box-singbox.log"},
-        route:{rules:[{protocol:"bittorrent", outbound:"block"}], auto_detect_interface:true},
+        route:{rules:[{protocol:"bittorrent", action:"route", outbound:"block"}], auto_detect_interface:true},
         inbounds:$inbounds,
         outbounds:[{type:"direct", tag:"direct"}, {type:"block", tag:"block"}]
     }' > "$tmp_out" || { rm -f "$tmp_out"; die 'Sing-box JSON 生成失败。'; }
@@ -1553,7 +1614,7 @@ build_singbox_config() {
 }
 
 deploy_official_hy2() {
-    local IS_SILENT=${1:-NORMAL} TLS_CONFIG HY2_LISTEN cert_cn
+    local IS_SILENT=${1:-NORMAL} TLS_CONFIG HY2_LISTEN cert_cn HY2_CAPS='CAP_NET_BIND_SERVICE' hy2_tmp hy2_bin
     if [[ "$IS_SILENT" != 'SILENT' ]]; then
         clear; msg "${BOLD}${GREEN}部署官方 Hysteria 2${NC}"
         init_system_environment
@@ -1567,8 +1628,11 @@ deploy_official_hy2() {
         get_architecture
     fi
 
-    fetch_github_release apernet/hysteria hysteria_core
-    install -m 755 /tmp/hysteria_core /usr/local/bin/hysteria || die '安装 hysteria 失败。'
+    hy2_tmp=$(mktemp -d /tmp/A-Box-hysteria.XXXXXX) || die 'Hysteria 临时目录创建失败。'
+    hy2_bin="$hy2_tmp/hysteria_core"
+    fetch_github_release apernet/hysteria hysteria_core "$hy2_bin"
+    install -m 755 "$hy2_bin" /usr/local/bin/hysteria || die '安装 hysteria 失败。'
+    rm -rf "$hy2_tmp"
     /usr/local/bin/hysteria version >/dev/null 2>&1 || die 'Hysteria 执行校验失败。'
 
     HY2_PASS=$(rand_alnum 20)
@@ -1576,13 +1640,27 @@ deploy_official_hy2() {
     mkdir -p /etc/hysteria
 
     if [[ -n "${HY2_DOMAIN:-}" ]]; then
-        TLS_CONFIG="acme:
+        if [[ "${HY2_ACME_TYPE:-http}" == 'dns' ]]; then
+            [[ "${HY2_ACME_DNS_PROVIDER:-}" == 'cloudflare' ]] || die '当前仅内置支持 Cloudflare DNS-01 ACME。'
+            [[ -n "${HY2_ACME_DNS_CF_API_TOKEN:-}" ]] || die 'Cloudflare DNS-01 ACME 需要 API Token。'
+            TLS_CONFIG="acme:
+  domains:
+    - ${HY2_DOMAIN}
+  email: admin@${HY2_DOMAIN}
+  type: dns
+  dns:
+    name: cloudflare
+    config:
+      cloudflare_api_token: ${HY2_ACME_DNS_CF_API_TOKEN}"
+        else
+            TLS_CONFIG="acme:
   domains:
     - ${HY2_DOMAIN}
   email: admin@${HY2_DOMAIN}
   type: http
   http:
     altPort: 80"
+        fi
         HY2_CERT_SHA256_FP=''
         HY2_CERT_PUBKEY_SHA256_B64=''
     else
@@ -1598,6 +1676,7 @@ deploy_official_hy2() {
 
     if [[ "${HY2_HOP:-}" == 'true' ]]; then
         HY2_LISTEN=":${HY2_RANGE_START}-${HY2_RANGE_END}"
+        HY2_CAPS='CAP_NET_ADMIN CAP_NET_BIND_SERVICE'
     else
         HY2_LISTEN=":${HY2_BASE_PORT}"
     fi
@@ -1624,16 +1703,16 @@ EOF_HY2
     chmod 600 /etc/hysteria/config.yaml
 
     if [[ "$INIT_SYS" == 'systemd' ]]; then
-        cat > /etc/systemd/system/hysteria.service <<'EOF_SVC'
+        cat > /etc/systemd/system/hysteria.service <<EOF_SVC
 [Unit]
 Description=Hysteria 2 Service
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-ExecStart=/usr/local/bin/hysteria server -c /etc/hysteria/config.yaml
+CapabilityBoundingSet=${HY2_CAPS}
+AmbientCapabilities=${HY2_CAPS}
+ExecStart=/bin/sh -c 'exec /usr/local/bin/hysteria server -c /etc/hysteria/config.yaml >>/var/log/A-Box-hysteria.log 2>&1'
 Restart=always
 RestartSec=10
 LimitNOFILE=1048576
@@ -1649,7 +1728,7 @@ EOF_SVC
 #!/sbin/openrc-run
 description="Hysteria 2 Service"
 command="/usr/local/bin/hysteria"
-command_args="server -c /etc/hysteria/config.yaml"
+command_args="server -c /etc/hysteria/config.yaml >>/var/log/A-Box-hysteria.log 2>&1"
 command_background="yes"
 pidfile="/run/hysteria.pid"
 depend() { need net; }
@@ -1658,6 +1737,7 @@ EOF_SVC
     fi
     service_manager start hysteria
     setup_geo_cron
+    setup_active_defense
     setup_health_monitor
     if [[ "$IS_SILENT" != 'SILENT' ]]; then
         write_env hysteria HY2
@@ -1678,18 +1758,25 @@ deploy_xray() {
     pre_install_setup xray "$MODE_IN"
     get_architecture
 
-    rm -rf /tmp/xray_ext /tmp/xray_core.zip 2>/dev/null
-    fetch_github_release XTLS/Xray-core xray_core.zip
-    unzip -qo /tmp/xray_core.zip -d /tmp/xray_ext || die 'Xray 压缩包解压失败。'
-    [[ -f /tmp/xray_ext/xray ]] || die '解压后未找到 xray 主程序。'
-    install -m 755 /tmp/xray_ext/xray /usr/local/bin/xray || die '安装 xray 失败。'
+    local xray_tmp xray_zip xray_ext geo_tmp
+    xray_tmp=$(mktemp -d /tmp/A-Box-xray.XXXXXX) || die 'Xray 临时目录创建失败。'
+    xray_zip="$xray_tmp/xray_core.zip"
+    xray_ext="$xray_tmp/xray_ext"
+    mkdir -p "$xray_ext"
+    fetch_github_release XTLS/Xray-core xray_core.zip "$xray_zip"
+    unzip -qo "$xray_zip" -d "$xray_ext" || die 'Xray 压缩包解压失败。'
+    [[ -f "$xray_ext/xray" ]] || die '解压后未找到 xray 主程序。'
+    install -m 755 "$xray_ext/xray" /usr/local/bin/xray || die '安装 xray 失败。'
     /usr/local/bin/xray version >/dev/null 2>&1 || die 'Xray 执行校验失败。'
     mkdir -p /usr/local/share/xray /usr/local/etc/xray
 
-    fetch_geo_data geoip.dat 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat'
-    fetch_geo_data geosite.dat 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat'
-    install -m 644 /tmp/geoip.dat /usr/local/share/xray/geoip.dat
-    install -m 644 /tmp/geosite.dat /usr/local/share/xray/geosite.dat
+    geo_tmp="$xray_tmp/geo"
+    mkdir -p "$geo_tmp"
+    fetch_geo_data geoip.dat 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat' "$geo_tmp/geoip.dat"
+    fetch_geo_data geosite.dat 'https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat' "$geo_tmp/geosite.dat"
+    install -m 644 "$geo_tmp/geoip.dat" /usr/local/share/xray/geoip.dat
+    install -m 644 "$geo_tmp/geosite.dat" /usr/local/share/xray/geosite.dat
+    rm -rf "$xray_tmp"
 
     KEYPAIR=$(/usr/local/bin/xray x25519)
     PK=$(awk '/Private/{print $NF}' <<< "$KEYPAIR")
@@ -1714,8 +1801,8 @@ Wants=network-online.target
 
 [Service]
 Environment="XRAY_LOCATION_ASSET=/usr/local/share/xray"
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 ExecStart=/usr/local/bin/xray run -config /usr/local/etc/xray/config.json
 Restart=always
 RestartSec=10
@@ -1753,7 +1840,7 @@ EOF_SVC
 }
 
 deploy_singbox() {
-    local MODE_IN=$1 KEYPAIR SB_PATH cert_cn='localhost' SB_PRE_START='' SB_POST_STOP='' SB_RC_PRE='' SB_RC_POST=''
+    local MODE_IN=$1 KEYPAIR SB_PATH cert_cn='localhost' SB_PRE_START='' SB_POST_STOP='' SB_RC_PRE='' SB_RC_POST='' SB_CAPS='CAP_NET_BIND_SERVICE'
     clear; msg "${BOLD}${GREEN}部署 Sing-box 核心 [$MODE_IN]${NC}"
     init_system_environment
     source "$ABOX_ENV" 2>/dev/null || true
@@ -1765,13 +1852,17 @@ deploy_singbox() {
     pre_install_setup singbox "$MODE_IN"
     get_architecture
 
-    rm -rf /tmp/sing-box-* /tmp/singbox_core.tar.gz /tmp/sing-box /tmp/singbox_ext 2>/dev/null
-    fetch_github_release SagerNet/sing-box singbox_core.tar.gz
-    mkdir -p /tmp/singbox_ext
-    tar -xzf /tmp/singbox_core.tar.gz -C /tmp/singbox_ext || die 'Sing-box 压缩包解压失败。'
-    SB_PATH=$(find /tmp/singbox_ext -type f -name 'sing-box' | head -n 1)
+    local sb_tmp sb_tar sb_ext
+    sb_tmp=$(mktemp -d /tmp/A-Box-singbox.XXXXXX) || die 'Sing-box 临时目录创建失败。'
+    sb_tar="$sb_tmp/singbox_core.tar.gz"
+    sb_ext="$sb_tmp/extract"
+    mkdir -p "$sb_ext"
+    fetch_github_release SagerNet/sing-box singbox_core.tar.gz "$sb_tar"
+    tar -xzf "$sb_tar" -C "$sb_ext" || die 'Sing-box 压缩包解压失败。'
+    SB_PATH=$(find "$sb_ext" -type f -name 'sing-box' | head -n 1)
     [[ -n "$SB_PATH" && -f "$SB_PATH" ]] || die '解压后未找到 sing-box 主程序。'
     install -m 755 "$SB_PATH" /usr/local/bin/sing-box || die '安装 sing-box 失败。'
+    rm -rf "$sb_tmp"
     /usr/local/bin/sing-box version >/dev/null 2>&1 || die 'Sing-box 执行校验失败。'
 
     mkdir -p /etc/sing-box
@@ -1802,6 +1893,7 @@ deploy_singbox() {
     /usr/local/bin/sing-box check -c /etc/sing-box/config.json >/dev/null 2>&1 || die 'Sing-box 配置校验失败。'
 
     if [[ "$MODE_IN" == *'HY2'* || "$MODE_IN" == *'ALL'* ]] && [[ "${HY2_HOP:-}" == 'true' ]]; then
+        SB_CAPS='CAP_NET_ADMIN CAP_NET_BIND_SERVICE'
         SB_PRE_START="ExecStartPre=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-Box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'
 ExecStartPre=-/bin/sh -c '$IPT -w -t nat -A PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-Box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
         SB_POST_STOP="ExecStopPost=-/bin/sh -c '$IPT -w -t nat -D PREROUTING -i $INGRESS_IF -p udp --dport ${HY2_RANGE_START}:${HY2_RANGE_END} -m comment --comment \"A-Box-HY2-HOP\" -j REDIRECT --to-ports $HY2_BASE_PORT 2>/dev/null || true'"
@@ -1838,8 +1930,8 @@ After=network-online.target nss-lookup.target
 Wants=network-online.target
 
 [Service]
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
+CapabilityBoundingSet=$SB_CAPS
+AmbientCapabilities=$SB_CAPS
 $SB_PRE_START
 ExecStart=/usr/local/bin/sing-box run -c /etc/sing-box/config.json
 $SB_POST_STOP
@@ -2212,17 +2304,25 @@ EOF_SYSCTL
         fi
     fi
     if [[ -f /usr/local/etc/xray/config.json ]] && command -v jq >/dev/null 2>&1; then
-        cp -f /usr/local/etc/xray/config.json /tmp/xray_config.bak
-        jq '(.inbounds[] | select(.protocol=="vless") | .streamSettings.sockopt) |= {"tcpKeepAliveIdle":30,"tcpKeepAliveInterval":30}' /usr/local/etc/xray/config.json > /tmp/xray_patch.json && mv -f /tmp/xray_patch.json /usr/local/etc/xray/config.json
-        jq empty /usr/local/etc/xray/config.json >/dev/null 2>&1 || { mv -f /tmp/xray_config.bak /usr/local/etc/xray/config.json; die 'Xray tune 后 JSON 非法，已回滚。'; }
-        /usr/local/bin/xray run -test -config /usr/local/etc/xray/config.json >/dev/null 2>&1 || { mv -f /tmp/xray_config.bak /usr/local/etc/xray/config.json; die 'Xray tune 后配置校验失败，已回滚。'; }
+        local xray_bak xray_patch
+        xray_bak=$(mktemp /tmp/A-Box-xray-config.XXXXXX) || die 'Xray tune 临时备份创建失败。'
+        xray_patch=$(mktemp /tmp/A-Box-xray-patch.XXXXXX) || die 'Xray tune 临时补丁创建失败。'
+        cp -f /usr/local/etc/xray/config.json "$xray_bak"
+        jq '(.inbounds[] | select(.protocol=="vless") | .streamSettings.sockopt) |= {"tcpKeepAliveIdle":30,"tcpKeepAliveInterval":30}' /usr/local/etc/xray/config.json > "$xray_patch" && mv -f "$xray_patch" /usr/local/etc/xray/config.json
+        jq empty /usr/local/etc/xray/config.json >/dev/null 2>&1 || { mv -f "$xray_bak" /usr/local/etc/xray/config.json; rm -f "$xray_patch"; die 'Xray tune 后 JSON 非法，已回滚。'; }
+        /usr/local/bin/xray run -test -config /usr/local/etc/xray/config.json >/dev/null 2>&1 || { mv -f "$xray_bak" /usr/local/etc/xray/config.json; rm -f "$xray_patch"; die 'Xray tune 后配置校验失败，已回滚。'; }
+        rm -f "$xray_bak" "$xray_patch"
         service_manager start xray
     fi
     if [[ -f /etc/sing-box/config.json ]] && command -v jq >/dev/null 2>&1; then
-        cp -f /etc/sing-box/config.json /tmp/sb_config.bak
-        jq '(.inbounds[] | select(.type=="vless" or .type=="shadowsocks")) |= . + {"tcp_keep_alive":"30s","tcp_keep_alive_interval":"30s"}' /etc/sing-box/config.json > /tmp/sb_patch.json && mv -f /tmp/sb_patch.json /etc/sing-box/config.json
-        jq empty /etc/sing-box/config.json >/dev/null 2>&1 || { mv -f /tmp/sb_config.bak /etc/sing-box/config.json; die 'Sing-box tune 后 JSON 非法，已回滚。'; }
-        /usr/local/bin/sing-box check -c /etc/sing-box/config.json >/dev/null 2>&1 || { mv -f /tmp/sb_config.bak /etc/sing-box/config.json; die 'Sing-box tune 后配置校验失败，已回滚。'; }
+        local sb_bak sb_patch
+        sb_bak=$(mktemp /tmp/A-Box-sb-config.XXXXXX) || die 'Sing-box tune 临时备份创建失败。'
+        sb_patch=$(mktemp /tmp/A-Box-sb-patch.XXXXXX) || die 'Sing-box tune 临时补丁创建失败。'
+        cp -f /etc/sing-box/config.json "$sb_bak"
+        jq '(.inbounds[] | select(.type=="vless" or .type=="shadowsocks")) |= . + {"tcp_keep_alive":"30s","tcp_keep_alive_interval":"30s"}' /etc/sing-box/config.json > "$sb_patch" && mv -f "$sb_patch" /etc/sing-box/config.json
+        jq empty /etc/sing-box/config.json >/dev/null 2>&1 || { mv -f "$sb_bak" /etc/sing-box/config.json; rm -f "$sb_patch"; die 'Sing-box tune 后 JSON 非法，已回滚。'; }
+        /usr/local/bin/sing-box check -c /etc/sing-box/config.json >/dev/null 2>&1 || { mv -f "$sb_bak" /etc/sing-box/config.json; rm -f "$sb_patch"; die 'Sing-box tune 后配置校验失败，已回滚。'; }
+        rm -f "$sb_bak" "$sb_patch"
         service_manager start sing-box
     fi
     setup_health_monitor
@@ -2231,17 +2331,38 @@ EOF_SYSCTL
     pause_return
 }
 
+
+run_remote_bash_script() {
+    local label="$1" url="$2" tmp sha
+    shift 2 || true
+    tmp=$(mktemp /tmp/A-Box-remote.XXXXXX.sh) || die '远程脚本临时文件创建失败。'
+    if ! curl -fLsS --connect-timeout 10 -m 120 "$url" -o "$tmp"; then
+        rm -f "$tmp"
+        die "远程脚本下载失败: $label"
+    fi
+    chmod 600 "$tmp"
+    sha=$(sha256sum "$tmp" | awk '{print $1}')
+    msg "${YELLOW}[*] Remote script: ${label}${NC}"
+    msg "${YELLOW}[*] Source: ${url}${NC}"
+    msg "${YELLOW}[*] SHA256: ${sha}${NC}"
+    bash -n "$tmp" || { rm -f "$tmp"; die "远程脚本语法校验失败: $label"; }
+    bash "$tmp" "$@"
+    local rc=$?
+    rm -f "$tmp"
+    return "$rc"
+}
+
 run_local_sni_benchmark() {
     local url='https://ghproxy.net/https://gist.githubusercontent.com/alariclin/9779dee79e9d61333e3fe6ba4fc1d315/raw/8b8e9209355869b4e66f94343dea1a995af2b84c/gistfile1.txt'
     if confirm_yes_no "$(printf "$(tr_msg confirm_remote)" '100-domain SNI benchmark gist')"; then
-        bash <(curl -fsSL "$url")
+        run_remote_bash_script '100-domain SNI benchmark gist' "$url"
     fi
     pause_return
 }
 
 run_warp_manager() {
     if confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'fscarmen/warp Cloudflare WARP menu')"; then
-        wget -N https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh && bash menu.sh
+        run_remote_bash_script 'fscarmen/warp Cloudflare WARP menu' 'https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh'
     fi
     pause_return
 }
@@ -2291,11 +2412,11 @@ vps_benchmark_menu() {
     read -r -ep 'Select [0-5]: ' bench_choice
     case "$bench_choice" in
         1)
-            confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'bench.sh')" && wget -qO- https://bench.sh | bash
+            confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'bench.sh')" && run_remote_bash_script 'bench.sh' 'https://bench.sh'
             pause_return
             ;;
         2)
-            confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'Check.Place')" && bash <(curl -fsSL https://Check.Place) -I
+            confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'Check.Place')" && run_remote_bash_script 'Check.Place' 'https://Check.Place' -I
             pause_return
             ;;
         3) run_local_sni_benchmark ;;
@@ -2321,6 +2442,214 @@ clean_uninstall_menu() {
     esac
 }
 
+
+urlencode() {
+    local raw="${1:-}"
+    jq -rn --arg v "$raw" '$v|@uri'
+}
+
+build_ss2022_uri() {
+    local host="$1" port="$2" pass="$3"
+    # SIP002/SIP022: AEAD-2022 userinfo must not be Base64URL encoded;
+    # method and password are percent-encoded as RFC3986 userinfo.
+    printf 'ss://%s:%s@%s:%s#A-Box-SS\n' \
+        "$(urlencode '2022-blake3-aes-128-gcm')" \
+        "$(urlencode "$pass")" \
+        "$host" "$port"
+}
+
+singbox_hy2_tls_json() {
+    if [[ -n "${HY2_DOMAIN:-}" && "${CORE:-}" != 'singbox' ]]; then
+        cat <<EOF_TLS
+      "tls": {
+        "enabled": true,
+        "server_name": "${HY2_DOMAIN}"
+      }
+EOF_TLS
+    else
+        cat <<EOF_TLS
+      "tls": {
+        "enabled": true,
+        "insecure": true,
+        "certificate_public_key_sha256": ["${HY2_CERT_PUBKEY_SHA256_B64:-}"]
+      }
+EOF_TLS
+    fi
+}
+
+write_clash_yaml() {
+    local out="${CLASH_YAML_PATH:-$ABOX_DIR/A-Box-clash.yaml}" S_IP="$LINK_IP" hy2_name="A-Box-Hy2-Self"
+    [[ -n "${HY2_DOMAIN:-}" ]] && S_IP="$HY2_DOMAIN"
+    [[ -n "${HY2_DOMAIN:-}" && "${CORE:-}" != 'singbox' ]] && hy2_name='A-Box-Hy2-ACME'
+    mkdir -p "$ABOX_DIR"
+    {
+        cat <<EOF_CLASH
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: true
+
+dns:
+  enable: true
+  listen: 0.0.0.0:1053
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver:
+    - https://dns.google/dns-query
+    - https://cloudflare-dns.com/dns-query
+  fallback:
+    - tls://8.8.4.4
+    - tls://1.1.1.1
+
+proxies:
+EOF_CLASH
+        if [[ "$MODE" == *'VISION'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
+            cat <<EOF_CLASH
+  - name: "A-Box-VLESS-Vision"
+    type: vless
+    server: "$LINK_IP"
+    port: $VLESS_PORT
+    uuid: "$UUID"
+    udp: true
+    tls: true
+    servername: "$VISION_SNI"
+    client-fingerprint: chrome
+    encryption: ""
+    network: tcp
+    flow: xtls-rprx-vision
+    packet-encoding: xudp
+    reality-opts:
+      public-key: "$PUBLIC_KEY"
+      short-id: "$SHORT_ID"
+    smux:
+      enabled: false
+EOF_CLASH
+        fi
+        if [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]]; then
+            cat <<EOF_CLASH
+  - name: "A-Box-VLESS-XHTTP"
+    type: vless
+    server: "$LINK_IP"
+    port: $XHTTP_PORT
+    uuid: "$UUID"
+    udp: true
+    tls: true
+    servername: "$XHTTP_SNI"
+    client-fingerprint: chrome
+    encryption: ""
+    network: xhttp
+    alpn:
+      - h2
+    reality-opts:
+      public-key: "$PUBLIC_KEY"
+      short-id: "$SHORT_ID"
+    xhttp-opts:
+      path: /xhttp
+      host: "$XHTTP_SNI"
+      mode: stream-one
+    smux:
+      enabled: false
+EOF_CLASH
+        fi
+        if [[ "$MODE" == *'HY2'* || "$MODE" == *'ALL'* ]]; then
+            if [[ -n "${HY2_DOMAIN:-}" && "$CORE" != 'singbox' ]]; then
+                if [[ "${HY2_HOP:-}" == 'true' ]]; then
+                    cat <<EOF_CLASH
+  - name: "$hy2_name"
+    type: hysteria2
+    server: "$HY2_DOMAIN"
+    ports: ${HY2_CLASH_PORTS}
+    hop-interval: 30
+    password: "$HY2_PASS"
+    alpn:
+      - h3
+    sni: "$HY2_DOMAIN"
+    obfs: salamander
+    obfs-password: "$HY2_OBFS"
+EOF_CLASH
+                else
+                    cat <<EOF_CLASH
+  - name: "$hy2_name"
+    type: hysteria2
+    server: "$HY2_DOMAIN"
+    port: $HY2_BASE_PORT
+    password: "$HY2_PASS"
+    alpn:
+      - h3
+    sni: "$HY2_DOMAIN"
+    obfs: salamander
+    obfs-password: "$HY2_OBFS"
+EOF_CLASH
+                fi
+            else
+                if [[ "${HY2_HOP:-}" == 'true' ]]; then
+                    cat <<EOF_CLASH
+  - name: "$hy2_name"
+    type: hysteria2
+    server: "$S_IP"
+    ports: ${HY2_CLASH_PORTS}
+    hop-interval: 30
+    password: "$HY2_PASS"
+    alpn:
+      - h3
+    skip-cert-verify: true
+    fingerprint: "$HY2_CERT_SHA256_FP"
+    obfs: salamander
+    obfs-password: "$HY2_OBFS"
+EOF_CLASH
+                else
+                    cat <<EOF_CLASH
+  - name: "$hy2_name"
+    type: hysteria2
+    server: "$S_IP"
+    port: $HY2_BASE_PORT
+    password: "$HY2_PASS"
+    alpn:
+      - h3
+    skip-cert-verify: true
+    fingerprint: "$HY2_CERT_SHA256_FP"
+    obfs: salamander
+    obfs-password: "$HY2_OBFS"
+EOF_CLASH
+                fi
+            fi
+        fi
+        if [[ "$MODE" == *'SS'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
+            cat <<EOF_CLASH
+  - name: "A-Box-SS"
+    type: ss
+    server: "$LINK_IP"
+    port: $SS_PORT
+    cipher: 2022-blake3-aes-128-gcm
+    password: "$SS_PASS"
+    udp: true
+    smux:
+      enabled: false
+EOF_CLASH
+        fi
+        cat <<EOF_CLASH
+
+proxy-groups:
+  - name: PROXY
+    type: select
+    proxies:
+EOF_CLASH
+        [[ "$MODE" == *'VISION'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]] && echo '      - A-Box-VLESS-Vision'
+        [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]] && echo '      - A-Box-VLESS-XHTTP'
+        [[ "$MODE" == *'HY2'* || "$MODE" == *'ALL'* ]] && echo "      - $hy2_name"
+        [[ "$MODE" == *'SS'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]] && echo '      - A-Box-SS'
+        cat <<EOF_CLASH
+      - DIRECT
+
+rules:
+  - MATCH,PROXY
+EOF_CLASH
+    } > "$out"
+    chmod 600 "$out"
+    printf '%s\n' "$out"
+}
+
 generate_qr() {
     local url=$1
     if command -v qrencode >/dev/null 2>&1; then
@@ -2337,168 +2666,72 @@ view_config() {
     source "$ABOX_ENV"
     VISION_SNI=${VISION_SNI:-${VLESS_SNI:-}}
     XHTTP_SNI=${XHTTP_SNI:-${VLESS_SNI:-}}
-    local F_IP="$LINK_IP" S_IP SS_BASE64 VLESS_URL XHTTP_URL HY2_URL SS_URL
+    local F_IP="$LINK_IP" S_IP VLESS_URL XHTTP_URL HY2_URL SS_URL CLASH_FILE CLASH_SUB_URL CLASH_SCHEME
+    local VISION_SNI_E XHTTP_SNI_E PUBLIC_KEY_E SHORT_ID_E HY2_PASS_E HY2_OBFS_E HY2_DOMAIN_E HY2_PIN_E
     [[ "$LINK_IP" =~ : ]] && F_IP="[$LINK_IP]"
     [[ -z "$LINK_IP" || "$LINK_IP" == 'N/A' ]] && msg "${YELLOW}[!] 未能自动获取公网 IP，分享链接可能不可用。${NC}"
+    VISION_SNI_E=$(urlencode "$VISION_SNI")
+    XHTTP_SNI_E=$(urlencode "$XHTTP_SNI")
+    PUBLIC_KEY_E=$(urlencode "$PUBLIC_KEY")
+    SHORT_ID_E=$(urlencode "$SHORT_ID")
+    HY2_PASS_E=$(urlencode "$HY2_PASS")
+    HY2_OBFS_E=$(urlencode "$HY2_OBFS")
+    HY2_DOMAIN_E=$(urlencode "$HY2_DOMAIN")
+    HY2_PIN_E=$(urlencode "$HY2_CERT_SHA256_FP")
     msg "${BLUE}======================================================================${NC}"
     msg "${BOLD}${CYAN}全局拓扑网络参数 (${MODE}) / Network Parameters${NC}"
     msg "${BLUE}======================================================================${NC}"
     msg "${BOLD}引擎栈:${NC} $CORE | ${BOLD}模式:${NC} $MODE"
     msg "${BLUE}----------------------------------------------------------------------${NC}"
-    msg "${YELLOW}[ 通用分享 URI / General URIs ]${NC}"
+    msg "${YELLOW}[ Shadowrocket / v2rayNG / NekoBox 单节点 URI ]${NC}"
     if [[ "$MODE" == *'VISION'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
-        VLESS_URL="vless://$UUID@$F_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VISION_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=tcp#A-Box-VLESS-Vision"
+        VLESS_URL="vless://$UUID@$F_IP:$VLESS_PORT?encryption=none&flow=xtls-rprx-vision&security=reality&sni=$VISION_SNI_E&fp=chrome&pbk=$PUBLIC_KEY_E&sid=$SHORT_ID_E&type=tcp#A-Box-VLESS-Vision"
         msg "${GREEN}${VLESS_URL}${NC}"
         generate_qr "$VLESS_URL"
     fi
     if [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]]; then
-        XHTTP_URL="vless://$UUID@$F_IP:$XHTTP_PORT?encryption=none&security=reality&sni=$XHTTP_SNI&fp=chrome&pbk=$PUBLIC_KEY&sid=$SHORT_ID&type=xhttp&path=%2Fxhttp&mode=stream-one#A-Box-VLESS-XHTTP"
+        XHTTP_URL="vless://$UUID@$F_IP:$XHTTP_PORT?encryption=none&security=reality&sni=$XHTTP_SNI_E&fp=chrome&pbk=$PUBLIC_KEY_E&sid=$SHORT_ID_E&type=xhttp&host=$XHTTP_SNI_E&path=%2Fxhttp&mode=stream-one#A-Box-VLESS-XHTTP"
         msg "${GREEN}${XHTTP_URL}${NC}"
         generate_qr "$XHTTP_URL"
     fi
     if [[ "$MODE" == *'HY2'* || "$MODE" == *'ALL'* ]]; then
         if [[ -n "${HY2_DOMAIN:-}" && "$CORE" != 'singbox' ]]; then
-            HY2_URL="hysteria2://$HY2_PASS@$HY2_DOMAIN:$HY2_URI_PORTS/?sni=$HY2_DOMAIN&obfs=salamander&obfs-password=$HY2_OBFS#A-Box-Hy2-ACME"
+            HY2_URL="hysteria2://$HY2_PASS_E@$HY2_DOMAIN:$HY2_URI_PORTS/?sni=$HY2_DOMAIN_E&obfs=salamander&obfs-password=$HY2_OBFS_E#A-Box-Hy2-ACME"
         else
             S_IP="$F_IP"
             [[ -n "${HY2_DOMAIN:-}" ]] && S_IP="$HY2_DOMAIN"
-            HY2_URL="hysteria2://$HY2_PASS@$S_IP:$HY2_URI_PORTS/?insecure=1&pinSHA256=$HY2_CERT_SHA256_FP&obfs=salamander&obfs-password=$HY2_OBFS#A-Box-Hy2-Self"
+            HY2_URL="hysteria2://$HY2_PASS_E@$S_IP:$HY2_URI_PORTS/?insecure=1&pinSHA256=$HY2_PIN_E&obfs=salamander&obfs-password=$HY2_OBFS_E#A-Box-Hy2-Self"
         fi
         msg "${GREEN}${HY2_URL}${NC}"
         [[ "${HY2_HOP:-}" == 'true' ]] && msg "${YELLOW}端口跳跃默认间隔 30s；不建议低于 5s。${NC}"
         generate_qr "$HY2_URL"
     fi
     if [[ "$MODE" == *'SS'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
-        SS_BASE64=$(printf '%s' "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 -w 0 2>/dev/null || printf '%s' "2022-blake3-aes-128-gcm:${SS_PASS}" | base64 | tr -d '\n')
-        SS_URL="ss://${SS_BASE64}@$F_IP:$SS_PORT#A-Box-SS"
+        SS_URL=$(build_ss2022_uri "$F_IP" "$SS_PORT" "$SS_PASS")
         msg "${GREEN}${SS_URL}${NC}"
         generate_qr "$SS_URL"
     fi
-    msg "${YELLOW}[提示] Clash/Mihomo 通常不能直接扫描单条 vless:// QR；请导入完整 YAML/订阅 URL，或复制下面的 Clash Meta 片段。${NC}"
+
+    CLASH_FILE=$(write_clash_yaml)
+    CLASH_SUB_URL="${ABOX_CLASH_SUB_URL:-${CLASH_SUB_URL:-}}"
+    msg "${BLUE}----------------------------------------------------------------------${NC}"
+    msg "${YELLOW}[ Clash / Mihomo 完整配置 ]${NC}"
+    msg "${GREEN}Local YAML: ${CLASH_FILE}${NC}"
+    msg "${YELLOW}Clash/Mihomo 类客户端请导入完整 YAML 或远程订阅 URL；不要扫描上方单条 vless:// / hysteria2:// / ss://。${NC}"
+    if [[ -n "$CLASH_SUB_URL" ]]; then
+        CLASH_SCHEME="clash://install-config?url=$(urlencode "$CLASH_SUB_URL")"
+        msg "${GREEN}Subscription URL: ${CLASH_SUB_URL}${NC}"
+        generate_qr "$CLASH_SUB_URL"
+        msg "${GREEN}Clash Verge Rev URL Scheme: ${CLASH_SCHEME}${NC}"
+        generate_qr "$CLASH_SCHEME"
+    else
+        msg "${YELLOW}未设置 ABOX_CLASH_SUB_URL。若需要 Clash 扫码导入，请把 ${CLASH_FILE} 发布到 HTTPS 后执行：${NC}"
+        msg "${CYAN}ABOX_CLASH_SUB_URL='https://example.com/A-Box-clash.yaml' sb${NC}"
+    fi
 
     msg "${BLUE}----------------------------------------------------------------------${NC}"
-    msg "${YELLOW}[ Clash Meta / Mihomo 示例 ]${NC}"
-    if [[ "$MODE" == *'VISION'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
-        cat <<EOF_CM
-  - name: "A-Box-VLESS-Vision"
-    type: vless
-    server: $LINK_IP
-    port: $VLESS_PORT
-    uuid: $UUID
-    udp: true
-    tls: true
-    servername: $VISION_SNI
-    client-fingerprint: chrome
-    encryption: ""
-    network: tcp
-    flow: xtls-rprx-vision
-    packet-encoding: xudp
-    reality-opts:
-      public-key: $PUBLIC_KEY
-      short-id: $SHORT_ID
-    smux:
-      enabled: false
-EOF_CM
-    fi
-    if [[ "$CORE" == 'xray' && ( "$MODE" == *'XHTTP'* || "$MODE" == *'ALL'* ) ]]; then
-        cat <<EOF_CM
-  - name: "A-Box-VLESS-XHTTP"
-    type: vless
-    server: $LINK_IP
-    port: $XHTTP_PORT
-    uuid: $UUID
-    udp: true
-    tls: true
-    servername: $XHTTP_SNI
-    client-fingerprint: chrome
-    encryption: ""
-    network: xhttp
-    alpn:
-      - h2
-    reality-opts:
-      public-key: $PUBLIC_KEY
-      short-id: $SHORT_ID
-    xhttp-opts:
-      path: /xhttp
-      mode: stream-one
-    smux:
-      enabled: false
-EOF_CM
-    fi
-    if [[ "$MODE" == *'HY2'* || "$MODE" == *'ALL'* ]]; then
-        S_IP="$LINK_IP"
-        [[ -n "${HY2_DOMAIN:-}" ]] && S_IP="$HY2_DOMAIN"
-        if [[ -n "${HY2_DOMAIN:-}" && "$CORE" != 'singbox' ]]; then
-            if [[ "${HY2_HOP:-}" == 'true' ]]; then
-                cat <<EOF_CM
-  - name: "A-Box-Hy2-ACME"
-    type: hysteria2
-    server: $HY2_DOMAIN
-    ports: ${HY2_CLASH_PORTS}
-    hop-interval: 30
-    password: "$HY2_PASS"
-    alpn: [h3]
-    sni: $HY2_DOMAIN
-    obfs: salamander
-    obfs-password: "$HY2_OBFS"
-EOF_CM
-            else
-                cat <<EOF_CM
-  - name: "A-Box-Hy2-ACME"
-    type: hysteria2
-    server: $HY2_DOMAIN
-    port: $HY2_BASE_PORT
-    password: "$HY2_PASS"
-    alpn: [h3]
-    sni: $HY2_DOMAIN
-    obfs: salamander
-    obfs-password: "$HY2_OBFS"
-EOF_CM
-            fi
-        else
-            if [[ "${HY2_HOP:-}" == 'true' ]]; then
-                cat <<EOF_CM
-  - name: "A-Box-Hy2-Self"
-    type: hysteria2
-    server: $S_IP
-    ports: ${HY2_CLASH_PORTS}
-    hop-interval: 30
-    password: "$HY2_PASS"
-    alpn: [h3]
-    skip-cert-verify: true
-    fingerprint: $HY2_CERT_SHA256_FP
-    obfs: salamander
-    obfs-password: "$HY2_OBFS"
-EOF_CM
-            else
-                cat <<EOF_CM
-  - name: "A-Box-Hy2-Self"
-    type: hysteria2
-    server: $S_IP
-    port: $HY2_BASE_PORT
-    password: "$HY2_PASS"
-    alpn: [h3]
-    skip-cert-verify: true
-    fingerprint: $HY2_CERT_SHA256_FP
-    obfs: salamander
-    obfs-password: "$HY2_OBFS"
-EOF_CM
-            fi
-        fi
-    fi
-    if [[ "$MODE" == *'SS'* || "$MODE" == *'ALL'* || "$MODE" == 'VLESS_SS' ]]; then
-        cat <<EOF_CM
-  - name: "A-Box-SS"
-    type: ss
-    server: $LINK_IP
-    port: $SS_PORT
-    cipher: 2022-blake3-aes-128-gcm
-    password: "$SS_PASS"
-    udp: true
-    smux:
-      enabled: false
-EOF_CM
-    fi
+    msg "${YELLOW}[ Clash / Mihomo YAML 预览 ]${NC}"
+    sed -n '1,220p' "$CLASH_FILE" 2>/dev/null || true
 
     msg "\n${YELLOW}--- Sing-box 出站示例 ---${NC}"
     if [[ "$MODE" == *'HY2'* || "$MODE" == *'ALL'* ]]; then
@@ -2512,11 +2745,7 @@ EOF_CM
       "server_ports": ["$HY2_SB_PORTS"],
       "hop_interval": "30s",
       "password": "$HY2_PASS",
-      "tls": {
-        "enabled": true,
-        "insecure": true,
-        "certificate_public_key_sha256": ["$HY2_CERT_PUBKEY_SHA256_B64"]
-      },
+$(singbox_hy2_tls_json),
       "obfs": {
         "type": "salamander",
         "password": "$HY2_OBFS"
@@ -2530,11 +2759,7 @@ EOF_SB
       "server": "$S_IP",
       "server_port": $HY2_BASE_PORT,
       "password": "$HY2_PASS",
-      "tls": {
-        "enabled": true,
-        "insecure": true,
-        "certificate_public_key_sha256": ["$HY2_CERT_PUBKEY_SHA256_B64"]
-      },
+$(singbox_hy2_tls_json),
       "obfs": {
         "type": "salamander",
         "password": "$HY2_OBFS"
@@ -2619,7 +2844,7 @@ show_usage() {
 14 Manual
    This page.
 15 OTA & Geo Update
-   Update A-Box script and Loyalsoldier geoip/geosite data.
+   Update A-Box script and Xray Loyalsoldier geoip/geosite data.
 16 Full/Partial Uninstall
    Remove proxy stack, firewall rules, services and optional sb shortcut.
 17 Environment Reset
@@ -2664,8 +2889,8 @@ EOF_USAGE
    输出 URI、二维码、Clash/Mihomo YAML、sing-box出站、v2rayN/v2rayNG XHTTP JSON。
 14 脚本说明书
    当前页面。
-15 脚本 OTA 升级与 Geo 资源更新
-   更新 A-Box 主脚本和 Loyalsoldier geoip/geosite 数据。
+15 脚本 OTA 升级与 Xray Geo 资源更新
+   更新 A-Box 主脚本和 Xray Loyalsoldier geoip/geosite 数据。
 16 一键全部清空卸载
    删除代理栈、服务、防火墙规则，可选择是否保留 sb 快捷入口。
 17 删除全部节点与环境初始化
@@ -2684,19 +2909,24 @@ EOF_USAGE
 
 update_script() {
     clear
-    local OTA_URL='https://raw.githubusercontent.com/alariclin/a-box/main/install.sh'
+    local OTA_URL='https://raw.githubusercontent.com/alariclin/a-box/main/install.sh' tmp_update sha
+    tmp_update=$(mktemp /tmp/A-Box-update.XXXXXX.sh) || die '更新脚本临时文件创建失败。'
     msg "${YELLOW}[*] 正在同步远端源码...${NC}"
-    if curl -fLs --connect-timeout 10 "$OTA_URL" -o /tmp/A-Box_update.sh; then
-        if bash -n /tmp/A-Box_update.sh && grep -q '==============================A-Box===============================' /tmp/A-Box_update.sh; then
-            mv /tmp/A-Box_update.sh "$ABOX_DIR/A-Box.sh"
-            chmod +x "$ABOX_DIR/A-Box.sh"
+    if curl -fLs --connect-timeout 10 "$OTA_URL" -o "$tmp_update"; then
+        sha=$(sha256sum "$tmp_update" | awk '{print $1}')
+        msg "${YELLOW}[*] OTA SHA256: ${sha}${NC}"
+        if bash -n "$tmp_update" && grep -q '==============================A-Box===============================' "$tmp_update"; then
+            install -m 755 "$tmp_update" "$ABOX_DIR/A-Box.sh"
+            rm -f "$tmp_update"
             msg "${GREEN}核心代码热更新完毕。${NC}"
             sleep 2
             exec "$ABOX_DIR/A-Box.sh"
         else
+            rm -f "$tmp_update"
             msg "${RED}[!] 更新脚本语法错误或指纹校验失败。${NC}"
         fi
     else
+        rm -f "$tmp_update"
         msg "${RED}[!] 无法抵达更新服务器。${NC}"
     fi
     pause_return
@@ -2707,9 +2937,9 @@ force_update_geo() {
     [[ -x "$ABOX_DIR/geo_update.sh" ]] || setup_geo_cron
     msg "${YELLOW}[*] 正在拉取 Loyalsoldier Geo 资源并执行校验...${NC}"
     if bash "$ABOX_DIR/geo_update.sh"; then
-        msg "${GREEN}Geo 资源更新与校验成功。${NC}"
+        msg "${GREEN}Xray Geo 资源更新与校验成功。${NC}"
     else
-        msg "${RED}[!] Geo 资源下载失败或校验未通过。${NC}"
+        msg "${RED}[!] Xray Geo 资源下载失败或校验未通过。${NC}"
     fi
     pause_return
 }
@@ -2717,10 +2947,10 @@ force_update_geo() {
 ota_and_geo_menu() {
     clear
     msg "${CYAN}======================================================================${NC}"
-    msg "${BOLD}${GREEN}脚本 OTA 升级与 Geo 资源更新${NC}"
+    msg "${BOLD}${GREEN}脚本 OTA 升级与 Xray Geo 资源更新${NC}"
     msg "${CYAN}======================================================================${NC}"
     msg "${YELLOW}1. 升级 A-Box 核心脚本${NC}"
-    msg "${YELLOW}2. 立即拉取并更新 Loyalsoldier Geo 资源${NC}"
+    msg "${YELLOW}2. 立即拉取并更新 Xray Loyalsoldier Geo 资源${NC}"
     msg "${GREEN}0. 返回主菜单${NC}"
     read -r -ep '请选择 [0-2]: ' ota_choice
     case "$ota_choice" in
@@ -2784,6 +3014,7 @@ run_self_tests() {
     assert_bad valid_url_https 'https://bad example.com/'
     [[ "$(normalize_https_url_input www.microsoft.com)" == 'https://www.microsoft.com/' ]] || { echo 'FAIL: normalize HTTPS URL'; failures=$((failures + 1)); }
     [[ "$(normalize_https_url_input https://www.microsoft.com)" == 'https://www.microsoft.com/' ]] || { echo 'FAIL: normalize HTTPS URL trailing slash'; failures=$((failures + 1)); }
+    [[ "$(build_ss2022_uri 203.0.113.10 2053 'abc+/=')" == 'ss://2022-blake3-aes-128-gcm:abc%2B%2F%3D@203.0.113.10:2053#A-Box-SS' ]] || { echo 'FAIL: SS-2022 SIP002/SIP022 URI percent encoding'; failures=$((failures + 1)); }
     assert_ok valid_ipv4_cidr 192.0.2.1/24
     assert_bad valid_ipv4_cidr 999.0.2.1/24
     assert_ok valid_ipv6_cidr 2001:db8::1/64
@@ -2818,6 +3049,13 @@ run_self_tests() {
     jq empty "$tmp/sing-box/config.json" >/dev/null 2>&1 || { echo 'FAIL: build_singbox_config JSON'; failures=$((failures + 1)); }
     jq -e '.inbounds[] | select(.type=="shadowsocks" and .listen_port==2053 and (.network|not))' "$tmp/sing-box/config.json" >/dev/null 2>&1 || { echo 'FAIL: Sing-box SS-2022 2053 default network'; failures=$((failures + 1)); }
     jq -e 'all(.inbounds[]; .type != "xhttp")' "$tmp/sing-box/config.json" >/dev/null 2>&1 || { echo 'FAIL: Sing-box ALL must not include XHTTP'; failures=$((failures + 1)); }
+    jq -e '.route.rules[] | select(.protocol=="bittorrent" and .action=="route" and .outbound=="block")' "$tmp/sing-box/config.json" >/dev/null 2>&1 || { echo 'FAIL: Sing-box route action'; failures=$((failures + 1)); }
+    ABOX_DIR="$tmp" ABOX_ENV="$tmp/.env" CORE=xray MODE=ALL PUBLIC_KEY=publickey LINK_IP=203.0.113.10 HY2_DOMAIN= HY2_HOP=false HY2_CERT_SHA256_FP=abcdef HY2_CERT_PUBKEY_SHA256_B64=abcdef CLASH_YAML_PATH="$tmp/A-Box-clash.yaml" write_clash_yaml >/dev/null
+    grep -q '^proxy-groups:' "$tmp/A-Box-clash.yaml" || { echo 'FAIL: Clash YAML proxy-groups'; failures=$((failures + 1)); }
+    grep -q '^dns:' "$tmp/A-Box-clash.yaml" || { echo 'FAIL: Clash YAML dns'; failures=$((failures + 1)); }
+    grep -q 'host: "www.microsoft.com"' "$tmp/A-Box-clash.yaml" || { echo 'FAIL: Clash XHTTP host'; failures=$((failures + 1)); }
+    CORE=xray HY2_DOMAIN=hy2.example.com HY2_CERT_PUBKEY_SHA256_B64= singbox_hy2_tls_json | grep -q '"server_name": "hy2.example.com"' || { echo 'FAIL: Sing-box HY2 ACME TLS sample'; failures=$((failures + 1)); }
+    CORE=singbox HY2_DOMAIN=hy2.example.com HY2_CERT_PUBKEY_SHA256_B64=abcdef singbox_hy2_tls_json | grep -q 'certificate_public_key_sha256' || { echo 'FAIL: Sing-box HY2 self-signed TLS sample'; failures=$((failures + 1)); }
 
     if (( failures > 0 )); then
         echo "SELF_TEST_FAILED=$failures"
@@ -2871,7 +3109,7 @@ main_loop() {
             msg "${GREEN}2.${NC} VLESS-XHTTP-Reality                ${GREEN}7.${NC} Shadowsocks-2022"
             msg "${GREEN}3.${NC} Shadowsocks-2022                   ${GREEN}8.${NC} VLESS + SS-2022"
             msg "${GREEN}4.${NC} Hysteria 2 (Native/Apernet)        ${GREEN}9.${NC} Hysteria 2 (Sing-box)"
-            msg "${GREEN}5.${NC} All-in-one (Xray+Hy2)             ${GREEN}10.${NC} All-in-one (Sing-box)"
+            msg "${GREEN}5.${NC} All-in-one (Xray+Hy2)              ${GREEN}10.${NC} All-in-one (Sing-box)"
             msg "${BLUE}----------------------------------------------------------------------${NC}"
             msg "${GREEN}11.${NC} Toolbox"
             msg "${GREEN}12.${NC} VPS One-click Optimization"
@@ -2883,7 +3121,7 @@ main_loop() {
             msg "${GREEN}18.${NC} Monthly Traffic Limit"
             msg "${GREEN}19.${NC} SS-2022 Whitelist Manager"
             msg "${GREEN}20.${NC} Language"
-            msg "${GREEN} 0.${NC} Exit"
+            msg "${GREEN}0.${NC} Exit"
             msg "${BLUE}======================================================================${NC}"
             read -r -ep "$(tr_msg main_command)" choice
         else
@@ -2894,19 +3132,19 @@ main_loop() {
             msg "${GREEN}2.${NC} VLESS-XHTTP-Reality                ${GREEN}7.${NC} Shadowsocks-2022"
             msg "${GREEN}3.${NC} Shadowsocks-2022                   ${GREEN}8.${NC} VLESS + SS-2022"
             msg "${GREEN}4.${NC} Hysteria 2 (官方/Apernet)          ${GREEN}9.${NC} Hysteria 2 (Sing-box)"
-            msg "${GREEN}5.${NC} 全协议四合一 (Xray+Hy2)           ${GREEN}10.${NC} 全协议三合一 (Sing-box)"
+            msg "${GREEN}5.${NC} 全协议四合一 (Xray+Hy2)            ${GREEN}10.${NC} 全协议三合一 (Sing-box)"
             msg "${BLUE}----------------------------------------------------------------------${NC}"
             msg "${GREEN}11.${NC} 综合工具箱"
             msg "${GREEN}12.${NC} VPS 一键优化"
             msg "${GREEN}13.${NC} 全部节点参数显示"
             msg "${GREEN}14.${NC} 脚本说明书"
-            msg "${GREEN}15.${NC} 脚本 OTA 升级与 Geo 资源更新"
+            msg "${GREEN}15.${NC} 脚本 OTA 升级与 Xray Geo 资源更新"
             msg "${GREEN}16.${NC} 一键全部清空卸载"
             msg "${GREEN}17.${NC} 删除全部节点与环境初始化"
             msg "${GREEN}18.${NC} 每月流量管控限制"
             msg "${GREEN}19.${NC} SS-2022 白名单 IP 管理"
             msg "${GREEN}20.${NC} 语言设置 / Language"
-            msg "${GREEN} 0.${NC} 退出脚本"
+            msg "${GREEN}0.${NC} 退出脚本"
             msg "${BLUE}======================================================================${NC}"
             read -r -ep "$(tr_msg main_command)" choice
         fi
