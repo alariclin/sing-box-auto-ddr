@@ -4,9 +4,9 @@
 
 <img width="1254" alt="A-Box Project Banner" src="https://github.com/user-attachments/assets/a3d48aac-b33d-4061-918c-1d1e93e3cee2" />
 
-**A-Box** is an all-in-one, production-ready Linux network gateway automation toolkit. It integrates full-cycle proxy service deployment, system performance tuning, traffic management, access control, service health self-healing, client configuration export, network quality testing, and a bilingual interactive terminal UI into a single standalone bash script. No complex dependencies, no remote script dependencies, one command to get started.
+**A-Box** is an all-in-one Linux network gateway automation toolkit. It integrates proxy service deployment, system tuning, traffic management, access control, service health checks, client configuration export, network quality testing, and a bilingual terminal UI into one standalone Bash script.
 
-**Credits**: Sincere thanks to Xray-core, sing-box, Hysteria and related open-source projects for technical inspiration and ecosystem support. A-Box is an independent automation orchestration toolkit.
+**Credits:** Sincere thanks to Xray-core, sing-box, Hysteria, and related open-source projects for technical inspiration and ecosystem support. A-Box is an independent automation orchestration toolkit.
 
 [![Version](https://img.shields.io/badge/Version-2026.05.04-success.svg?style=flat-square)](https://github.com/alariclin/a-box/releases)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
@@ -15,163 +15,178 @@
 
 ---
 
-## ⚠️ Compliance & Disclaimer
-This project is designed for **network architecture testing, cybersecurity research, and legitimate privacy protection in fully authorized environments**.
+## Compliance & Disclaimer
 
-1. **Legal Compliance**: You must not use this project for any activities that violate the laws and regulations of your country/region.
-2. **User Responsibility**: Users bear full legal, operational and security responsibility for any consequences caused by misuse or improper operation.
-3. **Technical Intent**: The routing and encryption technologies involved are designed to improve the security and privacy of data transmission. Do not use this tool for illegal attacks, unauthorized access, or damage to network infrastructure.
-4. **Acceptance**: By downloading, copying, or running this script, you confirm that you have read, understood and accepted all the terms above.
+This project is intended for **network architecture testing, cybersecurity research, and legitimate privacy protection in fully authorized environments**.
+
+1. **Legal compliance:** Do not use this project for any activity that violates the laws or regulations of your country or region.
+2. **User responsibility:** Users are fully responsible for all legal, operational, and security consequences caused by misuse or improper operation.
+3. **Technical intent:** The routing and encryption technologies involved are designed to improve data transmission security and privacy. Do not use this tool for illegal attacks, unauthorized access, or damage to network infrastructure.
+4. **Acceptance:** Downloading, copying, or running this script means you have read, understood, and accepted these terms.
 
 ---
 
-## 🚀 Quick Start
-### One-click Run (Global Channel)
+## Quick Start
+
+### One-click run: global channel
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh | sudo bash
 ```
 
-### One-click Run (Mirror Channel, for restricted networks)
+### One-click run: mirror channel
+
 ```bash
 curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh | sudo bash
 ```
 
-### Specify Language Directly
-```bash
-# Chinese UI
-curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh --lang zh
+### Specify UI language
 
-# English UI
-curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh --lang en
+```bash
+curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh
+sudo bash A-Box.sh --lang zh
+sudo bash A-Box.sh --lang en
 ```
 
-### Self-test & Status Check
+### Self-test, status, and help
+
 ```bash
-# Static syntax and function self-test (no side effects)
 sudo bash A-Box.sh --self-test
-
-# Show current deployment status and service running state
 sudo bash A-Box.sh --status
-
-# Show full CLI help
 sudo bash A-Box.sh --help
 ```
 
-### Post-installation Console Entry
-After the first run, you can open the interactive menu at any time with a single command:
+### Console shortcut
+
+After the first run, open the menu at any time with:
+
 ```bash
 sb
 ```
 
 ---
 
-## ✨ Core Features
-Fully aligned with the script's built-in logic, no false descriptions:
+## Core Features
 
-| Module | Detailed Description |
+| Module | Description |
 | :--- | :--- |
-| One-click Deployment | Native support for Xray-core, sing-box, and official Apernet Hysteria 2 core, with automatic dependency installation, environment initialization, and service orchestration. |
-| Full Protocol Stack | VLESS-Vision-Reality, VLESS-XHTTP-Reality, Shadowsocks-2022, Hysteria 2, with standardized configuration generation and compatibility verification. |
-| Standard Port Policy | Vision `443/TCP`, XHTTP `8443/TCP`, HY2 `443/UDP`, SS-2022 `2053/TCP+UDP`, with automatic port conflict detection and pre-occupation check. |
-| Secure SNI Policy | **All ports default to `www.microsoft.com`** (script explicitly avoids Apple/iCloud as default targets to reduce blocking risk); non-443 ports using Apple/iCloud SNI will trigger a security warning and secondary confirmation. |
-| Built-in SNI Radar | Full local SNI preference library (thousands of high-quality candidate domains), no remote script dependency; supports full mode and mini mode (for low-spec hosts), with TLS 1.3, ALPN, SAN, ASN topology scoring. |
-| XHTTP Optimization | Native XHTTP protocol support, exports `stream-one + h2 + smux disabled` configuration for optimal throughput, compatible with Mihomo v1.19.24+. |
-| Full-featured HY2 | Supports ACME HTTP-01 / Cloudflare DNS-01 domain certificates, self-signed certificates with pinning, native/iptables port hopping, HTTP/3 masquerade, and salamander obfuscation. |
-| Integrated Toolbox | System hardware & download benchmark, IP quality/streaming unlock/route testing, local SNI preference, Cloudflare WARP one-click management, 2G Swap virtual memory allocation. |
-| Production-grade O&M | One-click BBR/FQ system tuning, TCP KeepAlive anti-idle disconnection, Fail2Ban active defense, logrotate log management, L4 socket health self-healing probe, scheduled Geo data update, monthly traffic quota auto cutoff, SS-2022 IP whitelist management. |
-| Client Configuration Export | One-click generation of standard URI, terminal QR code, Clash/Mihomo full YAML configuration, sing-box outbound template, v2rayN/v2rayNG JSON configuration. |
-| Deployment Security Protection | New deployment will automatically stop managed old services, clean up A-Box firewall rules, and avoid port conflicts; full uninstall and environment reset are supported. |
+| One-click deployment | Installs dependencies, initializes the environment, deploys services, and manages Xray-core, sing-box, and official Hysteria 2. |
+| Protocol stack | VLESS-Vision-Reality, VLESS-XHTTP-Reality, Shadowsocks-2022, and Hysteria 2. |
+| Standard ports | Vision `443/TCP`, XHTTP `8443/TCP`, HY2 `443/UDP`, SS-2022 `2053/TCP+UDP`; custom ports are validated before deployment. |
+| SNI policy | Default REALITY SNI is `www.microsoft.com`. Apple/iCloud-like SNI on non-443 ports triggers a warning and secondary confirmation. Production SNI should be selected with the built-in SNI preference tool. |
+| Built-in SNI radar | Local candidate library with full and mini-host modes; no legacy remote SNI script dependency. Scores candidates by HTTPS/TLS metrics, TLS 1.3, ALPN, SAN verification, ASN/topology, and progress reporting. |
+| XHTTP export | Exports XHTTP client parameters using `/xhttp`, `stream-one`, HTTP/2 host, and `smux: false` for compatible clients such as Mihomo. |
+| Hysteria 2 modes | Supports ACME HTTP-01 and Cloudflare DNS-01 certificate workflows, self-signed certificate pinning, optional masquerade, optional port hopping, and optional Salamander obfuscation. |
+| Toolbox | Benchmark, IP quality/streaming/route test, full SNI preference, mini-host SNI preference, Cloudflare WARP manager, and 2G Swap allocation. |
+| Operations | BBR/FQ tuning, TCP KeepAlive, Fail2Ban, logrotate, health probe, scheduled Geo data update, monthly traffic cutoff, SS-2022 whitelist, `--status`. |
+| Export formats | URI, terminal QR, Clash/Mihomo YAML, sing-box outbound templates, v2rayN/v2rayNG JSON. |
+| Safe deployment | New deployments stop managed services, clean A-Box firewall rules, detect port conflicts, and keep full uninstall/environment reset options available. |
 
 ---
 
-## 📋 Full Menu Reference
-1:1 aligned with the script's interactive menu, no missing or wrong functions:
+## Full Menu Reference
 
-| Menu ID | Function Name | Core Use Case |
+| Menu | Function | Use case |
 | :--- | :--- | :--- |
-| 1 | Xray VLESS-Vision-Reality | Long-term stable primary TCP path, best for stealth and compatibility |
-| 2 | Xray VLESS-XHTTP-Reality | High-throughput desktop backup path, optimized for large bandwidth scenarios |
-| 3 | Xray Shadowsocks-2022 | Relay/landing inbound, recommended to use with IP whitelist for security |
-| 4 | Official Hysteria 2 (Apernet) | UDP/QUIC/H3 acceleration path, ideal for mobile networks and high packet loss links |
-| 5 | Xray + Official HY2 All-in-one | Balanced full-protocol deployment: Vision + XHTTP + HY2 + SS-2022 |
-| 6 | sing-box VLESS-Vision-Reality | Low-memory footprint single-core Vision deployment, for low-spec hosts |
-| 7 | sing-box Shadowsocks-2022 | Lightweight SS-2022 relay deployment, minimal resource usage |
-| 8 | sing-box VLESS + SS-2022 | Lightweight dual-protocol deployment, main path + relay path in one process |
-| 9 | sing-box Hysteria 2 | HY2 implementation based on sing-box, compatible with standard clients |
-| 10 | sing-box All-in-one | Sing-box full-protocol deployment: Vision + HY2 + SS-2022 (XHTTP excluded by design) |
-| 11 | Integrated Toolbox | System benchmark, IP quality test, SNI preference, WARP management, Swap allocation |
-| 12 | VPS One-click Optimization | System performance tuning, security hardening, and O&M capability deployment |
-| 13 | Display All Node Parameters | Show all connection links, QR codes, and full client configuration files |
-| 14 | Script Manual | Full terminal help documentation, detailed function description |
-| 15 | OTA, Geo & Core Upgrade | Script online update, Xray Geo data update, core binary upgrade without resetting node parameters |
-| 16 | Full Clean Uninstall | Remove proxy stack, services, configs, firewall rules, and optional sb shortcut |
-| 17 | Delete Nodes & Reinitialize Environment | Kill orphan processes, clean stale firewall rules, remove broken configs and services |
-| 18 | Monthly Traffic Limit Management | vnStat-based monthly traffic quota, auto stop services when quota is reached |
-| 19 | SS-2022 Whitelist Manager | Add/remove frontend IP/CIDR, enforce DROP for non-whitelisted sources |
-| 20 | Language Settings | Switch between Chinese/English UI, persistent save to local file |
-| 0 | Exit Script | Exit the interactive menu |
+| `1` | Xray VLESS-Vision-Reality | Primary TCP REALITY + Vision path. |
+| `2` | Xray VLESS-XHTTP-Reality | High-throughput XHTTP over REALITY path for compatible desktop clients. |
+| `3` | Xray Shadowsocks-2022 | TCP/UDP relay or landing inbound; whitelist is recommended. |
+| `4` | Official Hysteria 2 (Apernet) | UDP/QUIC/H3 path for mobile or lossy networks. |
+| `5` | Xray + Official HY2 all-in-one | Vision + XHTTP + HY2 + SS-2022. |
+| `6` | sing-box VLESS-Vision-Reality | Low-memory Vision deployment. |
+| `7` | sing-box Shadowsocks-2022 | Low-memory SS-2022 deployment. |
+| `8` | sing-box VLESS + SS-2022 | Lightweight two-protocol deployment. |
+| `9` | sing-box Hysteria 2 | HY2 implemented by sing-box. |
+| `10` | sing-box all-in-one | Vision + HY2 + SS-2022; XHTTP is excluded by design. |
+| `11` | Toolbox | Benchmark, IP check, SNI preference, WARP, Swap. |
+| `12` | VPS one-click optimization | BBR/FQ, file limits, KeepAlive, Fail2Ban, health probe. |
+| `13` | Display all node parameters | Show links, QR codes, YAML, JSON, and outbound templates. |
+| `14` | Manual | Full terminal manual. |
+| `15` | OTA, Geo & core upgrade | Update script, Xray Geo data, or upgrade installed cores without resetting node parameters. |
+| `16` | Clean uninstall | Remove managed services, configs, firewall rules, and optional `sb` shortcut. |
+| `17` | Delete nodes & reinitialize environment | Kill orphan processes, clean stale rules, and remove broken configs/services. |
+| `18` | Monthly traffic limit | vnStat-based monthly quota; stops services after quota is reached. |
+| `19` | SS-2022 whitelist manager | Add/remove frontend IP/CIDR and enforce DROP for non-whitelisted sources. |
+| `20` | Language settings | Switch Chinese/English UI and save to `/etc/ddr/.lang`. |
+| `0` | Exit | Exit the interactive menu. |
 
 ---
 
-## 🛠️ Toolbox Submenu Details
-| Submenu ID | Function | Detailed Description |
+## Toolbox Details
+
+| Submenu | Function | Description |
 | :--- | :--- | :--- |
-| 1 | System Benchmark | Run bench.sh for hardware performance and multi-node download speed test |
-| 2 | IP Quality & Route Test | Run Check.Place for IP purity, streaming service unlock, and return route test |
-| 3 | Full Local SNI Preference | Run built-in full SNI radar library, with HTTPS/TLS 1.3 metrics, OpenSSL verification, and ASN topology scoring |
-| 4 | Mini Host Local SNI Preference | Same candidate library as full mode, with reduced concurrency and verification depth, optimized for low-spec/low-bandwidth hosts |
-| 5 | Cloudflare WARP Manager | Run fscarmen/warp menu for outbound IP masking and streaming unlock |
-| 6 | 2G Swap Allocation | One-click create `/swapfile` to reduce OOM crash risk on low-memory hosts |
+| `1` | System benchmark | Runs `bench.sh` for hardware and download speed testing. |
+| `2` | IP quality and route test | Runs Check.Place for IP quality, streaming unlock, and route testing. |
+| `3` | Local SNI preference | Runs the full built-in SNI preference library with higher concurrency and deeper verification. |
+| `4` | Mini-host local SNI preference | Uses the same candidate library as full mode, but lowers concurrency and verification depth for low-spec hosts. |
+| `5` | Cloudflare WARP manager | Runs WARP manager for egress IP masking and streaming unlock scenarios. |
+| `6` | 2G Swap allocation | Creates `/swapfile` to reduce OOM risk on low-memory hosts. |
 
 ---
 
-## 🎯 Recommended Deployment Schemes
-| Scenario & Goal | Recommended Option |
+## Recommended Deployment Schemes
+
+| Scenario | Recommended option |
 | :--- | :--- |
-| Balanced production deployment | Menu `5`: Xray + Official HY2 All-in-one |
-| Low-memory lightweight deployment | Menu `10`: sing-box All-in-one |
-| Long-term stable primary TCP path | Menu `1`: Xray VLESS-Vision-Reality (443/TCP) |
-| High-throughput desktop backup path | Menu `2`: Xray VLESS-XHTTP-Reality (8443/TCP) |
-| Mobile/high packet loss network | Menu `4`: Official Hysteria 2 (443/UDP) |
-| Relay/landing node | Menu `3`: Xray SS-2022 (2053/TCP+UDP) + IP whitelist |
+| Balanced production deployment | Menu `5`: Xray + Official HY2 all-in-one. |
+| Low-memory lightweight deployment | Menu `10`: sing-box all-in-one. |
+| Primary TCP path | Menu `1`: Xray VLESS-Vision-Reality (`443/TCP`). |
+| High-throughput desktop backup | Menu `2`: Xray VLESS-XHTTP-Reality (`8443/TCP`). |
+| Mobile or lossy network | Menu `4`: Official Hysteria 2 (`443/UDP`). |
+| Relay/landing node | Menu `3`: Xray SS-2022 (`2053/TCP+UDP`) + whitelist. |
 
 ---
 
-## 🖥️ System Requirements
-| Item | Minimum Requirement |
+## SNI Selection Notes
+
+- Run SNI preference on the VPS, not on your local laptop, because REALITY target quality depends mainly on the VPS-to-target path.
+- Prefer candidates with `tls13=1`, `san=1`, valid ALPN, and same/near ASN or country when available.
+- Avoid API-only, rate-limited, unstable, or abnormal response targets when normal `200` web/document/static-resource targets are available.
+- Do not use raw IP addresses as SNI.
+- Apple/iCloud-like SNI on non-443 ports is explicitly warned by the script.
+
+---
+
+## System Requirements
+
+| Item | Requirement |
 | :--- | :--- |
-| Operating System | Debian 10+, Ubuntu 20.04+, CentOS/RHEL/Rocky/AlmaLinux 8+, Alpine Linux |
-| Init System | Systemd or OpenRC |
-| CPU Architecture | amd64/x86_64, arm64/aarch64 |
-| Privilege | root user or sudo permission |
-| Network | Access to system package repositories and GitHub Releases |
-| Basic Dependencies | bash, curl (script will automatically install all missing dependencies) |
+| Operating system | Debian 10+, Ubuntu 20.04+, CentOS/RHEL/Rocky/AlmaLinux 8+, Alpine Linux. |
+| Init system | systemd or OpenRC. |
+| CPU | amd64/x86_64, arm64/aarch64. |
+| Privilege | root or sudo. |
+| Network | Access to system package repositories and GitHub Releases. |
+| Dependencies | Bash, curl, jq, openssl, iptables, vnStat and others are installed automatically when missing. |
 
 ---
 
-## ❓ Frequently Asked Questions
-### Q: The script prompts "no interactive TTY available"
-A: Please run the script in a terminal with interactive TTY, or use `sudo bash A-Box.sh` instead of piping to bash via non-interactive channels.
+## FAQ
 
-### Q: Port is occupied, deployment failed
-A: The script will automatically check for port occupation by non-A-Box processes. Please manually release the occupied port before deployment, or choose a different port in the parameter wizard.
+### The script says no interactive TTY is available.
+Run it from an interactive terminal. If a pipeline environment fails, download the script first and run `sudo bash A-Box.sh`.
 
-### Q: ACME certificate application failed
-A: For HTTP-01 verification, ensure port 80/tcp is not occupied and accessible from the public network; for Cloudflare DNS-01 verification, ensure the API Token has correct DNS edit permissions for the domain.
+### Deployment failed because a port is occupied.
+The script checks for non-A-Box processes using selected ports. Release the port manually or choose a different port during deployment.
 
-### Q: How to choose the best SNI?
-A: Use the built-in SNI radar in Toolbox menu 3/4, prefer domains with `tls13=1`, `san=1`, `asnmatch=1`/`samecountry=1`, avoid Apple/iCloud SNI on non-443 ports.
+### ACME certificate application failed.
+For HTTP-01, make sure `80/TCP` is reachable and not occupied. For Cloudflare DNS-01, make sure the API token has DNS edit permission for the target zone.
 
-### Q: The service stops automatically after reaching the traffic limit
-A: The traffic limit function will stop all managed services when the monthly quota is reached. You can adjust or disable the limit via menu 18, and restart the services manually.
+### How should I choose SNI?
+Use Toolbox menu `3` or `4`. Prefer results with TLS 1.3, SAN match, valid ALPN, and reasonable ASN/topology relationship with the VPS.
 
----
-
-## 📬 Feedback & Contribution
-- Bug reports and feature requests: [GitHub Issues](https://github.com/alariclin/a-box/issues)
-- Code contributions: Welcome to submit Pull Requests to the main repository
+### Why did services stop after reaching the monthly traffic limit?
+Menu `18` can enforce a monthly vnStat quota. Disable or adjust the quota there, then restart services.
 
 ---
 
-## 📄 License
-This project is licensed under the [Apache License 2.0](LICENSE) open-source license.
+## Feedback & Contribution
+
+- [GitHub Issues](https://github.com/alariclin/a-box/issues)
+- Pull requests are welcome.
+
+---
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
