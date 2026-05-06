@@ -70,6 +70,10 @@ tr_msg() {
         en:toolbox_title) echo 'Toolbox / 综合工具箱' ;;
         zh:confirm_remote) echo '即将远程执行第三方脚本：%s。确认执行？[Y/N]: ' ;;
         en:confirm_remote) echo 'About to run third-party remote script: %s. Continue? [Y/N]: ' ;;
+        zh:confirm_local_sni_full) echo '即将运行本地内置全量 SNI 优选库（不执行远程脚本）。确认执行？[Y/N]: ' ;;
+        en:confirm_local_sni_full) echo 'About to run the local built-in full SNI preference library (no remote script execution). Continue? [Y/N]: ' ;;
+        zh:confirm_local_sni_mini) echo '即将运行本地内置微型主机 SNI 优选库（候选库与全量相同，不执行远程脚本）。确认执行？[Y/N]: ' ;;
+        en:confirm_local_sni_mini) echo 'About to run the local built-in mini-host SNI preference library (same candidate library as full, no remote script execution). Continue? [Y/N]: ' ;;
         zh:swap_exists) echo '检测到 /swapfile 已存在，跳过创建。' ;;
         en:swap_exists) echo '/swapfile already exists; creation skipped.' ;;
         zh:swap_done) echo 'Swap 处理完成。' ;;
@@ -3255,7 +3259,9 @@ EOF_SNI_PRIORITY
         awk '!seen[$0]++' > "$tmp"
 
     if [[ "$profile" == 'mini' ]]; then
-        max_count="${ABOX_SNI_MINI_MAX:-520}"
+        # Mini mode uses the same full candidate library as full mode to preserve the probability of finding the best SNI.
+        # It only lowers runtime pressure through reduced concurrency and verification limits.
+        max_count="${ABOX_SNI_MINI_MAX:-0}"
     else
         max_count="${ABOX_SNI_FULL_MAX:-0}"
     fi
@@ -3276,6 +3282,38 @@ sni_domain_penalty() {
     esac
     case "$domain" in
         docs.*|developer.*|developers.*|*.apache.org|*.mozilla.org|*.linuxfoundation.org|*.cncf.io|*.ietf.org|*.rfc-editor.org|*.w3.org|*.kernel.org|*.debian.org|*.ubuntu.com|*.cloudflare.com|*.fastly.com|*.confluent.io) penalty=$((penalty - 120)) ;;
+    esac
+    printf '%s\n' "$penalty"
+}
+
+asn_lookup_ip() {
+    local ip="${1:-}" cache_dir="${2:-/tmp/A-Box-asn-cache}" cache_file body asn country org
+    [[ -n "$ip" && "$ip" != 'N/A' ]] || { printf 'asn=unknown\tcountry=unknown\torg=unknown'; return 0; }
+    mkdir -p "$cache_dir" 2>/dev/null || true
+    cache_file="$cache_dir/$(printf '%s' "$ip" | tr -c 'A-Za-z0-9_.:-' '_')"
+    if [[ -s "$cache_file" ]]; then
+        cat "$cache_file"
+        return 0
+    fi
+    body=$(curl -fsS --connect-timeout 2 -m 4 "https://ipinfo.io/${ip}/json" 2>/dev/null || true)
+    if [[ -n "$body" ]] && command -v jq >/dev/null 2>&1; then
+        org=$(jq -r '.org // "unknown"' <<< "$body" 2>/dev/null | tr '\t\n\r' '   ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')
+        country=$(jq -r '.country // "unknown"' <<< "$body" 2>/dev/null | tr '\t\n\r' '   ' | sed -E 's/[[:space:]]+/ /g; s/^ //; s/ $//')
+        asn=$(sed -nE 's/^(AS[0-9]+).*/\1/p' <<< "$org")
+    fi
+    [[ -n "$asn" ]] || asn='unknown'
+    [[ -n "$country" ]] || country='unknown'
+    [[ -n "$org" ]] || org='unknown'
+    printf 'asn=%s\tcountry=%s\torg=%s' "$asn" "$country" "$org" | tee "$cache_file" 2>/dev/null || true
+}
+
+sni_org_cdn_penalty() {
+    local domain="${1,,}" org="${2,,}" penalty=0
+    case "$org $domain" in
+        *cloudflare*|*akamai*|*fastly*|*cloudfront*|*google*|*microsoft*|*amazon*|*aws*|*edgecast*|*verizon*|*stackpath*|*bunny*|*cdn77*) penalty=$((penalty + 250)) ;;
+    esac
+    case "$domain" in
+        *.cloudflare.com|*.fastly.com|*.akamai.com|*.apache.org|*.confluent.io|*.mozilla.org|*.kernel.org|*.debian.org|*.ubuntu.com) penalty=$((penalty - 80)) ;;
     esac
     printf '%s\n' "$penalty"
 }
@@ -3324,26 +3362,57 @@ sni_openssl_check() {
 
 sni_verify_raw_report() {
     local raw_sorted="$1" verified="$2" verify_limit="${3:-240}" timeout_s="${4:-5}" line score domain c3 c4 c5 c6 c7 c8 check tls13 alpn san add adj n=0
+    local asn_cache vps_ip vps_meta vps_asn vps_country target_ip target_meta target_asn target_country target_org asn_match same_country cdn_penalty progress_every=20
     : > "$verified"
+    asn_cache=$(mktemp -d /tmp/A-Box-asn-cache.XXXXXX) || asn_cache='/tmp'
+    vps_ip=$(get_public_ip 2>/dev/null || true)
+    vps_meta=$(asn_lookup_ip "$vps_ip" "$asn_cache")
+    vps_asn=$(awk -F'\t|=' '{for(i=1;i<=NF;i++) if($i=="asn"){print $(i+1); exit}}' <<< "$vps_meta")
+    vps_country=$(awk -F'\t|=' '{for(i=1;i<=NF;i++) if($i=="country"){print $(i+1); exit}}' <<< "$vps_meta")
+    [[ -n "$vps_asn" ]] || vps_asn='unknown'
+    [[ -n "$vps_country" ]] || vps_country='unknown'
+    msg "${YELLOW}[*] Stage 2: OpenSSL verification + ASN/topology scoring. VPS ${vps_ip:-N/A} ${vps_asn}/${vps_country}${NC}"
     while IFS=$'\t' read -r score domain c3 c4 c5 c6 c7 c8; do
         n=$((n + 1))
         (( n > verify_limit )) && break
+        if (( n == 1 || n % progress_every == 0 )); then
+            printf '\r[*] Stage 2 progress: %d/%d verified' "$n" "$verify_limit" >&2
+        fi
         check=$(sni_openssl_check "$domain" "$timeout_s")
         tls13=$(awk -F'\t|=' '{for(i=1;i<=NF;i++) if($i=="tls13"){print $(i+1); exit}}' <<< "$check")
         alpn=$(awk -F'\t|=' '{for(i=1;i<=NF;i++) if($i=="alpn"){print $(i+1); exit}}' <<< "$check")
         san=$(awk -F'\t|=' '{for(i=1;i<=NF;i++) if($i=="san"){print $(i+1); exit}}' <<< "$check")
+        target_ip="${c8#ip=}"
+        target_meta=$(asn_lookup_ip "$target_ip" "$asn_cache")
+        target_asn=$(awk -F'\t|=' '{for(i=1;i<=NF;i++) if($i=="asn"){print $(i+1); exit}}' <<< "$target_meta")
+        target_country=$(awk -F'\t|=' '{for(i=1;i<=NF;i++) if($i=="country"){print $(i+1); exit}}' <<< "$target_meta")
+        target_org=$(awk -F'\t|=' '{for(i=1;i<=NF;i++) if($i=="org"){print $(i+1); exit}}' <<< "$target_meta")
+        [[ -n "$target_asn" ]] || target_asn='unknown'
+        [[ -n "$target_country" ]] || target_country='unknown'
+        [[ -n "$target_org" ]] || target_org='unknown'
+        asn_match=0
+        same_country=0
+        [[ "$vps_asn" != 'unknown' && "$target_asn" == "$vps_asn" ]] && asn_match=1
+        [[ "$vps_country" != 'unknown' && "$target_country" == "$vps_country" ]] && same_country=1
         add=0
         [[ "$tls13" == '1' ]] || add=$((add + 6000))
         [[ "$san" == '1' ]] || add=$((add + 6000))
         [[ "$alpn" == 'h2' ]] || add=$((add + 700))
-        adj=$(awk -v s="$score" -v a="$add" 'BEGIN{printf "%08d", int(s)+int(a)}')
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$adj" "$domain" "$c3" "$c4" "$c5" "$c6" "$c7" "$c8" "$check" >> "$verified"
+        cdn_penalty=$(sni_org_cdn_penalty "$domain" "$target_org")
+        add=$((add + cdn_penalty))
+        [[ "$same_country" == '1' ]] && add=$((add - 250))
+        [[ "$asn_match" == '1' ]] && add=$((add - 1200))
+        adj=$(awk -v s="$score" -v a="$add" 'BEGIN{v=int(s)+int(a); if(v<0)v=0; printf "%08d", v}')
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tasn=%s\tcountry=%s\tasnmatch=%s\tsamecountry=%s\torg=%s\n' \
+            "$adj" "$domain" "$c3" "$c4" "$c5" "$c6" "$c7" "$c8" "$check" "$target_asn" "$target_country" "$asn_match" "$same_country" "$target_org" >> "$verified"
     done < "$raw_sorted"
+    printf '\r[*] Stage 2 progress: %d/%d verified\n' "$(( n > verify_limit ? verify_limit : n ))" "$verify_limit" >&2
     sort -n "$verified" -o "$verified"
+    rm -rf "$asn_cache" 2>/dev/null || true
 }
 
 run_builtin_sni_radar() {
-    local profile="${1:-full}" title="${2:-Local SNI preference}" workdir candidates raw raw_sorted report total concurrency timeout_s running=0 domain topn verify_limit
+    local profile="${1:-full}" title="${2:-Local SNI preference}" workdir candidates raw raw_sorted report total concurrency timeout_s running=0 domain topn verify_limit processed=0 valid_count=0 batch_start progress_every
     workdir=$(mktemp -d /tmp/A-Box-sni-radar.XXXXXX) || die 'SNI radar temporary directory creation failed.'
     candidates="$workdir/candidates.txt"
     raw="$workdir/results.raw.tsv"
@@ -3352,32 +3421,44 @@ run_builtin_sni_radar() {
     write_sni_candidate_library "$profile" "$candidates"
     total=$(wc -l < "$candidates" | tr -d ' ')
     if [[ "$profile" == 'mini' ]]; then
-        concurrency="${ABOX_SNI_MINI_CONCURRENCY:-12}"
+        # Mini mode uses the same candidate library as full mode. It reduces concurrency and verification depth only.
+        concurrency="${ABOX_SNI_MINI_CONCURRENCY:-8}"
         timeout_s="${ABOX_SNI_MINI_TIMEOUT:-5}"
-        topn=20
-        verify_limit="${ABOX_SNI_MINI_VERIFY:-120}"
+        topn=25
+        verify_limit="${ABOX_SNI_MINI_VERIFY:-180}"
     else
         concurrency="${ABOX_SNI_FULL_CONCURRENCY:-36}"
         timeout_s="${ABOX_SNI_FULL_TIMEOUT:-6}"
-        topn=30
-        verify_limit="${ABOX_SNI_FULL_VERIFY:-360}"
+        topn=35
+        verify_limit="${ABOX_SNI_FULL_VERIFY:-420}"
     fi
+    progress_every=$(( concurrency * 2 ))
+    (( progress_every < 20 )) && progress_every=20
     msg "${CYAN}======================================================================${NC}"
     msg "${BOLD}${GREEN}${title}${NC}"
     msg "${CYAN}======================================================================${NC}"
     msg "${YELLOW}[*] Candidate library: ${total} domains | profile=${profile} | concurrency=${concurrency}${NC}"
-    msg "${YELLOW}[*] Stage 1: HTTPS/TLSv1.3 curl metrics. Stage 2: OpenSSL TLS1.3 + ALPN + SAN verification for top candidates.${NC}"
+    msg "${YELLOW}[*] Stage 1: HTTPS/TLSv1.3 curl metrics. Stage 2: OpenSSL TLS1.3 + ALPN + SAN + ASN/topology scoring.${NC}"
     msg "${YELLOW}[*] Fully internal SNI library; no legacy remote SNI scripts or gist extraction are used.${NC}"
+    msg "${YELLOW}[*] Progress is printed after each batch; large libraries can take several minutes on low-end VPS.${NC}"
     : > "$raw"
     while IFS= read -r domain; do
         sni_probe_domain "$domain" "$raw" "$timeout_s" &
         running=$((running + 1))
+        processed=$((processed + 1))
         if (( running >= concurrency )); then
             wait
             running=0
+            valid_count=$(wc -l < "$raw" 2>/dev/null | tr -d ' ')
+            printf '\r[*] Stage 1 progress: %d/%d tested | valid=%s' "$processed" "$total" "${valid_count:-0}" >&2
+        elif (( processed % progress_every == 0 )); then
+            valid_count=$(wc -l < "$raw" 2>/dev/null | tr -d ' ')
+            printf '\r[*] Stage 1 progress: %d/%d queued | valid=%s' "$processed" "$total" "${valid_count:-0}" >&2
         fi
     done < "$candidates"
     wait
+    valid_count=$(wc -l < "$raw" 2>/dev/null | tr -d ' ')
+    printf '\r[*] Stage 1 progress: %d/%d tested | valid=%s\n' "$processed" "$total" "${valid_count:-0}" >&2
     if [[ ! -s "$raw" ]]; then
         rm -rf "$workdir"
         die 'SNI radar produced no valid HTTPS/TLS results. Check DNS, routing, firewall, curl/OpenSSL support.'
@@ -3391,22 +3472,22 @@ run_builtin_sni_radar() {
     cp -f "$report" "$ABOX_DIR/A-Box-sni-${profile}.tsv" 2>/dev/null || true
     msg "${BLUE}----------------------------------------------------------------------${NC}"
     msg "${YELLOW}[ Top SNI Candidates / 优选 SNI 候选 ]${NC}"
-    awk -F'\t' -v n="$topn" 'NR<=n {printf "%2d. %-42s %s %s %s %s %s %s\n", NR, $2, $3, $4, $5, $6, $7, $9}' "$report"
+    awk -F'\t' -v n="$topn" 'NR<=n {printf "%2d. %-42s %s %s %s %s %s %s %s %s %s\n", NR, $2, $3, $4, $5, $6, $7, $9, $10, $11, $12}' "$report"
     msg "${BLUE}----------------------------------------------------------------------${NC}"
     msg "${GREEN}Saved: ${ABOX_DIR}/A-Box-sni-${profile}.tsv${NC}"
-    msg "${YELLOW}Use only domains with tls13=1 and san=1. Prefer per-VPS measured results over fixed Apple/Nike templates.${NC}"
+    msg "${YELLOW}Use only domains with tls13=1 and san=1. Prefer asnmatch=1/samecountry=1 when available; avoid blindly using fixed Apple/Nike templates.${NC}"
     rm -rf "$workdir"
 }
 
 run_local_sni_benchmark() {
-    if confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'Built-in extended SNI preference library')"; then
+    if confirm_yes_no "$(tr_msg confirm_local_sni_full)"; then
         run_builtin_sni_radar 'full' 'Local SNI preference / 本地 SNI 优选'
     fi
     pause_return
 }
 
 run_local_sni_mini_benchmark() {
-    if confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'Built-in mini-host SNI preference library')"; then
+    if confirm_yes_no "$(tr_msg confirm_local_sni_mini)"; then
         run_builtin_sni_radar 'mini' 'Mini host local SNI preference / 微型主机本地 SNI 优选'
     fi
     pause_return
@@ -4266,9 +4347,12 @@ run_self_tests() {
     [[ "$sni_count" =~ ^[0-9]+$ && "$sni_count" -ge 2500 ]] || { echo "FAIL: SNI library size < 2500 ($sni_count)"; failures=$((failures + 1)); }
     grep -qx 'www.confluent.io' "$tmp/sni-full.txt" || { echo 'FAIL: SNI library missing www.confluent.io'; failures=$((failures + 1)); }
     grep -qx 'www.apache.org' "$tmp/sni-full.txt" || { echo 'FAIL: SNI library missing www.apache.org'; failures=$((failures + 1)); }
-    ABOX_SNI_MINI_MAX=520 write_sni_candidate_library mini "$tmp/sni-mini.txt"
+    ABOX_SNI_MINI_MAX=0 write_sni_candidate_library mini "$tmp/sni-mini.txt"
     mini_count=$(wc -l < "$tmp/sni-mini.txt" | tr -d ' ')
-    [[ "$mini_count" =~ ^[0-9]+$ && "$mini_count" -ge 400 ]] || { echo "FAIL: SNI mini library size < 400 ($mini_count)"; failures=$((failures + 1)); }
+    [[ "$mini_count" =~ ^[0-9]+$ && "$mini_count" -eq "$sni_count" ]] || { echo "FAIL: SNI mini library does not match full library ($mini_count vs $sni_count)"; failures=$((failures + 1)); }
+    declare -f asn_lookup_ip >/dev/null || { echo 'FAIL: ASN lookup function missing'; failures=$((failures + 1)); }
+    declare -f sni_org_cdn_penalty >/dev/null || { echo 'FAIL: ASN/CDN scoring function missing'; failures=$((failures + 1)); }
+    [[ "$(tr_msg confirm_local_sni_full)" != *'远程执行第三方脚本'* ]] || { echo 'FAIL: local SNI prompt still says remote third-party'; failures=$((failures + 1)); }
     assert_ok valid_ipv4_cidr 192.0.2.1/24
     assert_bad valid_ipv4_cidr 999.0.2.1/24
     assert_ok valid_ipv6_cidr 2001:db8::1/64
@@ -4375,7 +4459,7 @@ main_loop() {
             msg "${GREEN}18.${NC} Monthly Traffic Limit"
             msg "${GREEN}19.${NC} SS-2022 Whitelist Manager"
             msg "${GREEN}20.${NC} Language"
-            msg "${GREEN}0.${NC} Exit"
+            msg "${GREEN} 0.${NC} Exit"
             msg "${BLUE}======================================================================${NC}"
             read -r -ep "$(tr_msg main_command)" choice
         else
