@@ -1,330 +1,177 @@
-确认：你当前仓库里的 README 文件（四种语言）是 **原始版本**，并没有包含我建议的更新内容 —— 所以直接访问的 Raw GitHub 链接仍是未修改版本。([GitHub][1])
+# A-Box | One-click Linux Network Gateway Toolkit
 
-下面先给出 **我为你优化后的四种语言 README 完整 Markdown 内容（方案 1）**。你可以按语言分别保存为本地文件（例如 `README.md`, `README-zh.md` 等）。这些内容 **严格对应 install.sh 脚本行为、术语一致、结构完整、可发布到仓库**。 我会按语言顺序输出，每段完整标明文件名。
+[English](README.md) | [简体中文](README-zh.md) | [Русский](README-ru.md) | [فارسی](README-fa.md)
 
----
+<img width="1254" alt="A-Box Project Banner" src="https://github.com/user-attachments/assets/a3d48aac-b33d-4061-918c-1d1e93e3cee2" />
 
-## 📌 README.md — English (优化版)
+**A-Box** is an all-in-one, production-ready Linux network gateway automation toolkit. It integrates full-cycle proxy service deployment, system performance tuning, traffic management, access control, service health self-healing, client configuration export, network quality testing, and a bilingual interactive terminal UI into a single standalone bash script. No complex dependencies, no remote script dependencies, one command to get started.
 
-````
-# A‑Box — One‑click Linux Network Gateway Toolkit
+**Credits**: Sincere thanks to Xray-core, sing-box, Hysteria and related open-source projects for technical inspiration and ecosystem support. A-Box is an independent automation orchestration toolkit.
 
-A‑Box is a one‑click Linux network gateway automation toolkit integrating:
-service deployment, system optimization, traffic control,
-access management, health checks, parameter export,
-network quality testing, and a multilingual terminal UI,
-all unified into a single installable script. Credits to Xray‑core,
-sing‑box, Hysteria and related open‑source projects for technical
-inspiration and ecosystem support.
+[![Version](https://img.shields.io/badge/Version-2026.05.04-success.svg?style=flat-square)](https://github.com/alariclin/a-box/releases)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/alariclin/a-box?style=flat-square&color=yellow)](https://github.com/alariclin/a-box/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/alariclin/a-box?style=flat-square&color=orange)](https://github.com/alariclin/a-box/network/members)
 
 ---
 
 ## ⚠️ Compliance & Disclaimer
+This project is designed for **network architecture testing, cybersecurity research, and legitimate privacy protection in fully authorized environments**.
 
-This project is intended for authorized network architecture
-testing, cybersecurity research, and legitimate privacy protection.
-- **Legal compliance:** Do not use this project for activities that
-  violate laws or regulations in your country or region.
-- **User responsibility:** Users are fully responsible for any legal,
-  operational, or security consequences caused by misuse.
-- **Technical intent:** Routing and encryption technologies are to
-  improve data transmission security and privacy. Do not use them
-  for illegal attacks or unauthorized access.
-- **Acceptance:** Downloading, copying, or running this script
-  implies acceptance of these terms.
+1. **Legal Compliance**: You must not use this project for any activities that violate the laws and regulations of your country/region.
+2. **User Responsibility**: Users bear full legal, operational and security responsibility for any consequences caused by misuse or improper operation.
+3. **Technical Intent**: The routing and encryption technologies involved are designed to improve the security and privacy of data transmission. Do not use this tool for illegal attacks, unauthorized access, or damage to network infrastructure.
+4. **Acceptance**: By downloading, copying, or running this script, you confirm that you have read, understood and accepted all the terms above.
 
 ---
 
 ## 🚀 Quick Start
-
+### One-click Run (Global Channel)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
-````
-
-Mirror channel:
-
-```bash
-curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
+curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh | sudo bash
 ```
 
-Select language:
-
+### One-click Run (Mirror Channel, for restricted networks)
 ```bash
-sudo bash A-Box.sh --lang en
+curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh | sudo bash
 ```
 
-Status check:
-
+### Specify Language Directly
 ```bash
+# Chinese UI
+curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh --lang zh
+
+# English UI
+curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh --lang en
+```
+
+### Self-test & Status Check
+```bash
+# Static syntax and function self-test (no side effects)
+sudo bash A-Box.sh --self-test
+
+# Show current deployment status and service running state
 sudo bash A-Box.sh --status
+
+# Show full CLI help
+sudo bash A-Box.sh --help
 ```
 
-Open console:
-
+### Post-installation Console Entry
+After the first run, you can open the interactive menu at any time with a single command:
 ```bash
 sb
 ```
 
 ---
 
-## 🧠 Key Features
+## ✨ Core Features
+Fully aligned with the script's built-in logic, no false descriptions:
 
-* One‑click deployment: Xray‑core, sing‑box, official Hysteria 2.
-* Supported protocols: VLESS‑Reality, VLESS‑XHTTP‑Reality,
-  Shadowsocks‑2022, Hysteria 2.
-* Recommended ports: Vision 443/TCP, XHTTP 8443/TCP,
-  HY2 443/UDP, SS‑2022 2053/TCP+UDP.
-* Built‑in SNI strategy avoiding Apple/iCloud on non‑443 ports.
-* Export formats: URI, QR code, Clash/Mihomo YAML, client JSON.
-* Toolbox: Benchmark, IP check, local SNI test, WARP manager,
-  2G Swap.
-* Operations & hardening: BBR/FQ, KeepAlive, Fail2Ban, logrotate,
-  health probes, traffic control.
+| Module | Detailed Description |
+| :--- | :--- |
+| One-click Deployment | Native support for Xray-core, sing-box, and official Apernet Hysteria 2 core, with automatic dependency installation, environment initialization, and service orchestration. |
+| Full Protocol Stack | VLESS-Vision-Reality, VLESS-XHTTP-Reality, Shadowsocks-2022, Hysteria 2, with standardized configuration generation and compatibility verification. |
+| Standard Port Policy | Vision `443/TCP`, XHTTP `8443/TCP`, HY2 `443/UDP`, SS-2022 `2053/TCP+UDP`, with automatic port conflict detection and pre-occupation check. |
+| Secure SNI Policy | **All ports default to `www.microsoft.com`** (script explicitly avoids Apple/iCloud as default targets to reduce blocking risk); non-443 ports using Apple/iCloud SNI will trigger a security warning and secondary confirmation. |
+| Built-in SNI Radar | Full local SNI preference library (thousands of high-quality candidate domains), no remote script dependency; supports full mode and mini mode (for low-spec hosts), with TLS 1.3, ALPN, SAN, ASN topology scoring. |
+| XHTTP Optimization | Native XHTTP protocol support, exports `stream-one + h2 + smux disabled` configuration for optimal throughput, compatible with Mihomo v1.19.24+. |
+| Full-featured HY2 | Supports ACME HTTP-01 / Cloudflare DNS-01 domain certificates, self-signed certificates with pinning, native/iptables port hopping, HTTP/3 masquerade, and salamander obfuscation. |
+| Integrated Toolbox | System hardware & download benchmark, IP quality/streaming unlock/route testing, local SNI preference, Cloudflare WARP one-click management, 2G Swap virtual memory allocation. |
+| Production-grade O&M | One-click BBR/FQ system tuning, TCP KeepAlive anti-idle disconnection, Fail2Ban active defense, logrotate log management, L4 socket health self-healing probe, scheduled Geo data update, monthly traffic quota auto cutoff, SS-2022 IP whitelist management. |
+| Client Configuration Export | One-click generation of standard URI, terminal QR code, Clash/Mihomo full YAML configuration, sing-box outbound template, v2rayN/v2rayNG JSON configuration. |
+| Deployment Security Protection | New deployment will automatically stop managed old services, clean up A-Box firewall rules, and avoid port conflicts; full uninstall and environment reset are supported. |
 
 ---
 
-## 📋 Menu Summary
+## 📋 Full Menu Reference
+1:1 aligned with the script's interactive menu, no missing or wrong functions:
 
-Menus include:
+| Menu ID | Function Name | Core Use Case |
+| :--- | :--- | :--- |
+| 1 | Xray VLESS-Vision-Reality | Long-term stable primary TCP path, best for stealth and compatibility |
+| 2 | Xray VLESS-XHTTP-Reality | High-throughput desktop backup path, optimized for large bandwidth scenarios |
+| 3 | Xray Shadowsocks-2022 | Relay/landing inbound, recommended to use with IP whitelist for security |
+| 4 | Official Hysteria 2 (Apernet) | UDP/QUIC/H3 acceleration path, ideal for mobile networks and high packet loss links |
+| 5 | Xray + Official HY2 All-in-one | Balanced full-protocol deployment: Vision + XHTTP + HY2 + SS-2022 |
+| 6 | sing-box VLESS-Vision-Reality | Low-memory footprint single-core Vision deployment, for low-spec hosts |
+| 7 | sing-box Shadowsocks-2022 | Lightweight SS-2022 relay deployment, minimal resource usage |
+| 8 | sing-box VLESS + SS-2022 | Lightweight dual-protocol deployment, main path + relay path in one process |
+| 9 | sing-box Hysteria 2 | HY2 implementation based on sing-box, compatible with standard clients |
+| 10 | sing-box All-in-one | Sing-box full-protocol deployment: Vision + HY2 + SS-2022 (XHTTP excluded by design) |
+| 11 | Integrated Toolbox | System benchmark, IP quality test, SNI preference, WARP management, Swap allocation |
+| 12 | VPS One-click Optimization | System performance tuning, security hardening, and O&M capability deployment |
+| 13 | Display All Node Parameters | Show all connection links, QR codes, and full client configuration files |
+| 14 | Script Manual | Full terminal help documentation, detailed function description |
+| 15 | OTA, Geo & Core Upgrade | Script online update, Xray Geo data update, core binary upgrade without resetting node parameters |
+| 16 | Full Clean Uninstall | Remove proxy stack, services, configs, firewall rules, and optional sb shortcut |
+| 17 | Delete Nodes & Reinitialize Environment | Kill orphan processes, clean stale firewall rules, remove broken configs and services |
+| 18 | Monthly Traffic Limit Management | vnStat-based monthly traffic quota, auto stop services when quota is reached |
+| 19 | SS-2022 Whitelist Manager | Add/remove frontend IP/CIDR, enforce DROP for non-whitelisted sources |
+| 20 | Language Settings | Switch between Chinese/English UI, persistent save to local file |
+| 0 | Exit Script | Exit the interactive menu |
 
-* Vision, XHTTP, SS‑2022, HY2 native, all‑in‑one,
-* sing‑box Vision/SS‑2022/combined,
-* toolbox, traffic control, whitelist,
-* status, uninstall, environment reset, OTA update,
-* language switch, and more.
+---
+
+## 🛠️ Toolbox Submenu Details
+| Submenu ID | Function | Detailed Description |
+| :--- | :--- | :--- |
+| 1 | System Benchmark | Run bench.sh for hardware performance and multi-node download speed test |
+| 2 | IP Quality & Route Test | Run Check.Place for IP purity, streaming service unlock, and return route test |
+| 3 | Full Local SNI Preference | Run built-in full SNI radar library, with HTTPS/TLS 1.3 metrics, OpenSSL verification, and ASN topology scoring |
+| 4 | Mini Host Local SNI Preference | Same candidate library as full mode, with reduced concurrency and verification depth, optimized for low-spec/low-bandwidth hosts |
+| 5 | Cloudflare WARP Manager | Run fscarmen/warp menu for outbound IP masking and streaming unlock |
+| 6 | 2G Swap Allocation | One-click create `/swapfile` to reduce OOM crash risk on low-memory hosts |
+
+---
+
+## 🎯 Recommended Deployment Schemes
+| Scenario & Goal | Recommended Option |
+| :--- | :--- |
+| Balanced production deployment | Menu `5`: Xray + Official HY2 All-in-one |
+| Low-memory lightweight deployment | Menu `10`: sing-box All-in-one |
+| Long-term stable primary TCP path | Menu `1`: Xray VLESS-Vision-Reality (443/TCP) |
+| High-throughput desktop backup path | Menu `2`: Xray VLESS-XHTTP-Reality (8443/TCP) |
+| Mobile/high packet loss network | Menu `4`: Official Hysteria 2 (443/UDP) |
+| Relay/landing node | Menu `3`: Xray SS-2022 (2053/TCP+UDP) + IP whitelist |
 
 ---
 
 ## 🖥️ System Requirements
-
-* Linux: Debian/Ubuntu/CentOS/RHEL/AlmaLinux/Rocky/Alpine.
-* Init: systemd or OpenRC.
-* CPU: amd64/x86_64, arm64/aarch64.
-* Privilege: root or sudo.
-* Network: access to package repos & GitHub Releases.
-
----
-
-## 📌 License
-
-Apache License 2.0 (see LICENSE).
-
-```
+| Item | Minimum Requirement |
+| :--- | :--- |
+| Operating System | Debian 10+, Ubuntu 20.04+, CentOS/RHEL/Rocky/AlmaLinux 8+, Alpine Linux |
+| Init System | Systemd or OpenRC |
+| CPU Architecture | amd64/x86_64, arm64/aarch64 |
+| Privilege | root user or sudo permission |
+| Network | Access to system package repositories and GitHub Releases |
+| Basic Dependencies | bash, curl (script will automatically install all missing dependencies) |
 
 ---
 
-## 📌 README‑zh.md — 简体中文 (优化版)
+## ❓ Frequently Asked Questions
+### Q: The script prompts "no interactive TTY available"
+A: Please run the script in a terminal with interactive TTY, or use `sudo bash A-Box.sh` instead of piping to bash via non-interactive channels.
 
-```
+### Q: Port is occupied, deployment failed
+A: The script will automatically check for port occupation by non-A-Box processes. Please manually release the occupied port before deployment, or choose a different port in the parameter wizard.
 
-# A‑Box 一键 Linux 网络网关工具箱
+### Q: ACME certificate application failed
+A: For HTTP-01 verification, ensure port 80/tcp is not occupied and accessible from the public network; for Cloudflare DNS-01 verification, ensure the API Token has correct DNS edit permissions for the domain.
 
-A‑Box 是一款面向 Linux 服务器的一键网络网关自动化工具箱。
-它集成服务部署、系统优化、流量控制、访问管理、健康检查、
-参数导出、网络质量测试和多语言终端界面到一个可安装脚本。
+### Q: How to choose the best SNI?
+A: Use the built-in SNI radar in Toolbox menu 3/4, prefer domains with `tls13=1`, `san=1`, `asnmatch=1`/`samecountry=1`, avoid Apple/iCloud SNI on non-443 ports.
 
----
-
-## ⚠️ 合规与免责声明
-
-本项目定位于授权环境下的网络架构测试、网络安全研究与隐私
-保护自动化工具。
-
-* **法律合规:** 禁止将本项目用于违反法律法规的用途。
-* **用户责任:** 因不当使用或操作造成的后果由用户自行承担。
-* **技术用途:** 路由与加密技术用于提升传输安全性与隐私。
-* **接受条款:** 下载、复制或运行脚本即视为已接受本声明。
+### Q: The service stops automatically after reaching the traffic limit
+A: The traffic limit function will stop all managed services when the monthly quota is reached. You can adjust or disable the limit via menu 18, and restart the services manually.
 
 ---
 
-## 🚀 快速部署
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
-```
-
-镜像通道：
-
-```bash
-curl -fsSL https://ghp.ci/https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
-```
-
-语言选择：
-
-```bash
-sudo bash A-Box.sh --lang zh
-```
-
-状态检查：
-
-```bash
-sudo bash A-Box.sh --status
-```
-
-打开控制台：
-
-```bash
-sb
-```
+## 📬 Feedback & Contribution
+- Bug reports and feature requests: [GitHub Issues](https://github.com/alariclin/a-box/issues)
+- Code contributions: Welcome to submit Pull Requests to the main repository
 
 ---
 
-## 🧠 核心功能
-
-* 一键部署 Xray‑core、sing‑box、官方 Hysteria 2。
-* 支持协议：VLESS‑Reality、VLESS‑XHTTP‑Reality、SS‑2022、HY2。
-* 推荐端口：Vision 443/TCP、XHTTP 8443/TCP、HY2 443/UDP、SS‑2022 2053/TCP+UDP。
-* 内建智能 SNI 避免非443 Apple/iCloud。
-* 导出格式：URI、二维码、YAML/JSON 等。
-* 工具箱：测速、IP 检查、本地 SNI 测试、WARP 管理、Swap。
-* 系统硬化：BBR/FQ、KeepAlive、Fail2Ban、日志轮转、健康探针、流量控制。
-
----
-
-## 📋 菜单速览
-
-菜单项包括：Vision、XHTTP、SS‑2022、官方 HY2、全协议组合，
-sing‑box 各类部署、工具箱、流量管控、白名单、状态、卸载、
-环境重置、OTA 更新、语言切换等。
-
----
-
-## 📌 许可证
-
-Apache License 2.0（见 LICENSE）。
-
-```
-
----
-
-## 📌 README‑ru.md — Русский (优化版)
-
-```
-
-# A‑Box — Одно‑кликовый сетевой шлюз для Linux
-
-A‑Box — автоматизированный инструмент для развертывания сетевого шлюза
-на Linux, объединяющий установку служб, оптимизацию системы,
-управление трафиком, проверку состояния, экспорт параметров и
-многоязычный терминальный интерфейс.
-
----
-
-## ⚠️ Юридическое уведомление
-
-Проект предназначен для тестирования сетевой архитектуры в
-разрешенной среде и исследований безопасности.
-
-* Соблюдайте законы своей страны.
-* Пользователь несет ответственность за последствия.
-* Используйте технологии только для повышения безопасности.
-
----
-
-## 🚀 Быстрый старт
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
-```
-
-Выбор языка:
-
-```bash
-sudo bash A-Box.sh --lang ru
-```
-
-Проверка статуса:
-
-```bash
-sudo bash A-Box.sh --status
-```
-
----
-
-## 🧠 Основные возможности
-
-* Одно‑кликовое развертывание Xray‑core, sing‑box, Hysteria 2.
-* Поддержка VLESS‑Reality, XHTTP‑Reality, SS‑2022, HY2.
-* Экспорт URI, QR, YAML/JSON для клиентов.
-* Инструменты: тест скорости, проверка IP, локальный SNI‑тест, WARP, Swap.
-* Система защиты: BBR/FQ, Fail2Ban, логротация, health‑probe.
-
----
-
-## 📌 Лицензия
-
-Apache License 2.0。
-
-```
-
----
-
-## 📌 README‑fa.md — فارسی (优化版)
-
-```
-
-# A‑Box — ابزار یک‌کلیک دروازه شبکه برای لینوکس
-
-A‑Box مجموعه‌ای خودکار برای استقرار دروازه شبکه در لینوکس است
-که نصب سرویس‌ها، بهینه‌سازی سیستم، مدیریت ترافیک، بررسی سلامت،
-صادرات پارامترها و رابط چندزبانه ترمینال را در یک اسکریپت ترکیب می‌کند.
-
----
-
-## ⚠️ اعلامیه قانونی
-
-این پروژه برای تست شبکه مجاز و تحقیقات امنیتی طراحی شده است.
-استفاده غیرقانونی ممنوع است. کاربر مسئول نتایج استفاده نادرست است.
-
----
-
-## 🚀 شروع سریع
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/alariclin/a-box/main/install.sh > A-Box.sh && sudo bash A-Box.sh
-```
-
-انتخاب زبان:
-
-```bash
-sudo bash A-Box.sh --lang fa
-```
-
----
-
-## 🧠 قابلیت‌ها
-
-* نصب یک‌کلیک Xray‑core, sing‑box, Hysteria 2.
-* پشتیبانی از VLESS‑Reality, XHTTP‑Reality, SS‑2022, HY2.
-* خروجی URI, QR, YAML/JSON برای کلاینت‌ها.
-* ابزارها: تست سرعت, بررسی IP, تست SNI, مدیریت WARP/Swap.
-* بهبود سیستم: BBR/FQ, Fail2Ban, health checks.
-
----
-
-## 📌 مجوز
-
-Apache License 2.0.
-
-```
-
----
-
-## 下一步
-
-如果以上内容 **需要生成 Base64 压缩包输出（方案 2）或 GitHub patch（方案 3）**，回复对应数字：  
-```
-
-2
-
-```或
-```
-
-3
-
-```
-我将据此输出可下载的压缩内容。 :contentReference[oaicite:1]{index=1}
-::contentReference[oaicite:2]{index=2}
-```
-
-[1]: https://github.com/alariclin/a-box/tree/main?utm_source=chatgpt.com "GitHub - alariclin/a-box: Xray / hysteria2 / sing-box one-click install ..."
+## 📄 License
+This project is licensed under the [Apache License 2.0](LICENSE) open-source license.
