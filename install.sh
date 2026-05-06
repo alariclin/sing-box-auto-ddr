@@ -14,7 +14,7 @@ MAGENTA='\033[0;35m'
 NC='\033[0m'
 BOLD='\033[1m'
 
-DEPS_MARKER='/etc/ddr/.deps.v20260504'
+DEPS_MARKER='/etc/ddr/.deps.v20260507'
 SCRIPT_URL='https://raw.githubusercontent.com/alariclin/a-box/main/install.sh'
 ABOX_DIR='/etc/ddr'
 ABOX_ENV='/etc/ddr/.env'
@@ -68,8 +68,8 @@ tr_msg() {
         en:bad_port) echo 'Invalid port: %s' ;;
         zh:toolbox_title) echo '综合工具箱 / Toolbox' ;;
         en:toolbox_title) echo 'Toolbox / 综合工具箱' ;;
-        zh:confirm_remote) echo '即将远程执行第三方脚本：%s。确认执行？[Y/N]: ' ;;
-        en:confirm_remote) echo 'About to run third-party remote script: %s. Continue? [Y/N]: ' ;;
+        zh:confirm_remote) echo '即将下载第三方远程脚本：%s。下载后会显示 SHA256 并要求强确认。继续下载？[Y/N]: ' ;;
+        en:confirm_remote) echo 'About to download a third-party remote script: %s. SHA256 will be shown and a strong confirmation will be required. Continue download? [Y/N]: ' ;;
         zh:confirm_local_sni_full) echo '即将运行本地内置全量 SNI 优选库（不执行远程脚本）。确认执行？[Y/N]: ' ;;
         en:confirm_local_sni_full) echo 'About to run the local built-in full SNI preference library (no remote script execution). Continue? [Y/N]: ' ;;
         zh:confirm_local_sni_mini) echo '即将运行本地内置微型主机 SNI 优选库（候选库与全量相同，不执行远程脚本）。确认执行？[Y/N]: ' ;;
@@ -494,7 +494,7 @@ init_system_environment() {
         removeType='dnf -y remove'
     fi
 
-    if command -v systemctl >/dev/null 2>&1; then
+    if systemd_available; then
         INIT_SYS='systemd'
     elif command -v rc-service >/dev/null 2>&1; then
         INIT_SYS='openrc'
@@ -619,6 +619,13 @@ get_architecture() {
     esac
 }
 
+systemd_available() {
+    command -v systemctl >/dev/null 2>&1 || return 1
+    [[ -d /run/systemd/system ]] && return 0
+    [[ "$(cat /proc/1/comm 2>/dev/null || true)" == 'systemd' ]] && return 0
+    systemctl is-system-running --quiet >/dev/null 2>&1
+}
+
 service_manager() {
     local action=$1; shift
     local srv pid
@@ -681,7 +688,7 @@ is_service_running() {
 
 build_status_str() {
     local status_str='' statuses status
-    if [[ "${INIT_SYS:-}" == 'systemd' ]] && command -v systemctl >/dev/null 2>&1; then
+    if [[ "${INIT_SYS:-}" == 'systemd' ]] && systemd_available; then
         mapfile -t statuses < <(systemctl is-active xray sing-box hysteria 2>/dev/null || true)
         [[ "${statuses[0]:-}" == 'active' ]] && status_str+="${GREEN}Xray-Core${NC} "
         [[ "${statuses[1]:-}" == 'active' ]] && status_str+="${CYAN}Sing-Box${NC} "
@@ -721,7 +728,7 @@ confirm_deployment_replacement() {
 show_status_report() {
     local init='unknown' xray_state='unknown' sing_state='unknown' hy2_state='unknown' shortcut_state='missing'
     [[ -f "$ABOX_ENV" ]] && source "$ABOX_ENV" 2>/dev/null || true
-    if command -v systemctl >/dev/null 2>&1; then
+    if systemd_available; then
         init='systemd'
         xray_state=$(systemctl is-active xray 2>/dev/null || true)
         sing_state=$(systemctl is-active sing-box 2>/dev/null || true)
@@ -732,6 +739,9 @@ show_status_report() {
         rc-service sing-box status >/dev/null 2>&1 && sing_state='active' || sing_state='inactive'
         rc-service hysteria status >/dev/null 2>&1 && hy2_state='active' || hy2_state='inactive'
     fi
+    xray_state=${xray_state:-inactive}
+    sing_state=${sing_state:-inactive}
+    hy2_state=${hy2_state:-inactive}
     [[ -x /usr/local/bin/sb ]] && shortcut_state='executable'
     cat <<EOF_STATUS
 A-Box status
@@ -1507,7 +1517,7 @@ build_xray_config() {
     inbounds_json=$(jq -n \
         --arg mode "$mode" \
         --arg uuid "$UUID" \
-        --arg v_sni "${VISION_SNI:-${VLESS_SNI:-www.apple.com}}" \
+        --arg v_sni "${VISION_SNI:-${VLESS_SNI:-www.microsoft.com}}" \
         --arg x_sni "${XHTTP_SNI:-${VLESS_SNI:-www.microsoft.com}}" \
         --arg pk "$PK" \
         --arg sid "$SHORT_ID" \
@@ -1565,7 +1575,7 @@ build_singbox_config() {
     inbounds_json=$(jq -n \
         --arg mode "$mode" \
         --arg uuid "$UUID" \
-        --arg v_sni "${VISION_SNI:-${VLESS_SNI:-www.apple.com}}" \
+        --arg v_sni "${VISION_SNI:-${VLESS_SNI:-www.microsoft.com}}" \
         --arg x_sni "${XHTTP_SNI:-${VLESS_SNI:-www.microsoft.com}}" \
         --arg pk "$PK" \
         --arg sid "$SHORT_ID" \
@@ -1622,6 +1632,7 @@ deploy_official_hy2() {
         clear; msg "${BOLD}${GREEN}部署官方 Hysteria 2${NC}"
         init_system_environment
         source "$ABOX_ENV" 2>/dev/null || true
+        light_preflight_check
         confirm_deployment_replacement hysteria HY2
         release_ports
         clean_nat_rules
@@ -1753,6 +1764,7 @@ deploy_xray() {
     clear; msg "${BOLD}${GREEN}部署 Xray-core [$MODE_IN]${NC}"
     init_system_environment
     source "$ABOX_ENV" 2>/dev/null || true
+    light_preflight_check
     confirm_deployment_replacement xray "$MODE_IN"
     release_ports
     clean_nat_rules
@@ -1847,6 +1859,7 @@ deploy_singbox() {
     clear; msg "${BOLD}${GREEN}部署 Sing-box 核心 [$MODE_IN]${NC}"
     init_system_environment
     source "$ABOX_ENV" 2>/dev/null || true
+    light_preflight_check
     confirm_deployment_replacement singbox "$MODE_IN"
     release_ports
     clean_nat_rules
@@ -2250,6 +2263,7 @@ check_virgin_state() {
     msg "${YELLOW}删除全部节点与环境初始化 / Delete all nodes and perform environment initialization${NC}"
     read -r -ep '确定执行环境深度自愈吗？[Y/N]: ' confirm_virgin
     is_yes "$confirm_virgin" || { msg "${GREEN}操作已取消。${NC}"; pause_return; return; }
+    auto_backup_prompt 'environment reset' "$ABOX_DIR/backups"
     stop_all_managed_services
     killall -TERM xray sing-box hysteria 2>/dev/null || true
     sleep 1
@@ -2335,6 +2349,37 @@ EOF_SYSCTL
 }
 
 
+sha256_in_allowlist() {
+    local sha="$1" allowlist="${2:-}"
+    [[ -n "$sha" && -n "$allowlist" ]] || return 1
+    tr ',;[:space:]' '\n' <<< "$allowlist" | grep -Eiq "^${sha}$"
+}
+
+confirm_remote_script_hash() {
+    local label="$1" url="$2" sha="$3" answer
+    if [[ -n "${ABOX_REMOTE_SHA256_ALLOWLIST:-}" ]]; then
+        if sha256_in_allowlist "$sha" "$ABOX_REMOTE_SHA256_ALLOWLIST"; then
+            msg "${GREEN}[*] Remote script SHA256 matched ABOX_REMOTE_SHA256_ALLOWLIST.${NC}"
+            return 0
+        fi
+        die "Remote script SHA256 is not in ABOX_REMOTE_SHA256_ALLOWLIST: ${label}"
+    fi
+    if [[ "${ABOX_ALLOW_UNTRUSTED_REMOTE:-}" == '1' ]]; then
+        msg "${YELLOW}[!] ABOX_ALLOW_UNTRUSTED_REMOTE=1 set; executing without interactive strong confirmation.${NC}"
+        return 0
+    fi
+    if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
+        msg "${YELLOW}[!] This is third-party code outside A-Box control. Syntax validation is not a trust guarantee.${NC}"
+        msg "${YELLOW}[!] Review the source and SHA256 before execution: ${url}${NC}"
+        read -r -ep 'Type YES-RUN-UNTRUSTED to execute this remote script: ' answer
+    else
+        msg "${YELLOW}[!] 这是 A-Box 无法控制的第三方代码。语法校验不等于可信校验。${NC}"
+        msg "${YELLOW}[!] 执行前请核对来源与 SHA256：${url}${NC}"
+        read -r -ep '输入 YES-RUN-UNTRUSTED 才执行此远程脚本: ' answer
+    fi
+    [[ "$answer" == 'YES-RUN-UNTRUSTED' ]] || return 130
+}
+
 run_remote_bash_script() {
     local label="$1" url="$2" tmp sha
     shift 2 || true
@@ -2349,6 +2394,7 @@ run_remote_bash_script() {
     msg "${YELLOW}[*] Source: ${url}${NC}"
     msg "${YELLOW}[*] SHA256: ${sha}${NC}"
     bash -n "$tmp" || { rm -f "$tmp"; die "远程脚本语法校验失败: $label"; }
+    confirm_remote_script_hash "$label" "$url" "$sha" || { rm -f "$tmp"; msg "${YELLOW}[*] Remote script execution canceled: ${label}${NC}"; return 130; }
     bash "$tmp" "$@"
     local rc=$?
     rm -f "$tmp"
@@ -6815,6 +6861,362 @@ setup_swap_2g() {
     pause_return
 }
 
+
+redact_secrets_stream() {
+    sed -E \
+        -e 's/(UUID=).*/\1***REDACTED***/g' \
+        -e 's/(SS_PASS=).*/\1***REDACTED***/g' \
+        -e 's/(HY2_PASS=).*/\1***REDACTED***/g' \
+        -e 's/(HY2_OBFS=).*/\1***REDACTED***/g' \
+        -e 's/(HY2_ACME_DNS_CF_API_TOKEN=).*/\1***REDACTED***/g' \
+        -e 's/(PRIVATE_KEY|privateKey|private_key|password|passwd|token|secret|api[_-]?key)([=:] ?)[^ ,}\"]+/\1\2***REDACTED***/Ig' \
+        -e 's/(vless|hysteria2|hy2|ss):\/\/[^[:space:]]+/***CLIENT_LINK_REDACTED***/Ig'
+}
+
+write_redacted_file() {
+    local src="$1" dst="$2"
+    [[ -r "$src" ]] || return 0
+    mkdir -p "$(dirname "$dst")"
+    redact_secrets_stream < "$src" > "$dst" 2>/dev/null || true
+}
+
+collect_abox_cron() {
+    crontab -l 2>/dev/null | grep -E '(/etc/ddr/|A-Box|geo_update|socket_probe)' || true
+}
+
+backup_current_config() {
+    local ts backup_dir work root tarball checksum answer
+    ts=$(date +%Y%m%d-%H%M%S)
+    backup_dir="${1:-$ABOX_DIR/backups}"
+    work=$(mktemp -d /tmp/A-Box-backup.XXXXXX) || die 'Backup temp directory creation failed.'
+    root="$work/root"
+    mkdir -p "$backup_dir" "$root" "$work/meta"
+    chmod 700 "$backup_dir" 2>/dev/null || true
+
+    msg "${YELLOW}[*] Creating A-Box configuration backup...${NC}"
+
+    backup_copy_path() {
+        local src="$1" dst
+        [[ -e "$src" ]] || return 0
+        dst="$root${src}"
+        mkdir -p "$(dirname "$dst")"
+        cp -a "$src" "$dst" 2>/dev/null || true
+    }
+
+    backup_copy_abox_dir() {
+        # Back up A-Box runtime/config files, but do not recursively include old
+        # backups, diagnostics, or preflight reports. Otherwise every backup can
+        # grow by embedding previous backup archives.
+        [[ -d "$ABOX_DIR" ]] || return 0
+        mkdir -p "$root$ABOX_DIR"
+        (
+            cd "$ABOX_DIR" || exit 0
+            tar --exclude='./backups' --exclude='./diagnostics' --exclude='./preflight' -cpf - . 2>/dev/null | tar -C "$root$ABOX_DIR" -xpf - 2>/dev/null
+        ) || true
+    }
+
+    backup_copy_abox_dir
+    backup_copy_path /usr/local/bin/sb
+    backup_copy_path /usr/local/etc/xray
+    backup_copy_path /etc/sing-box
+    backup_copy_path /etc/hysteria
+    backup_copy_path /etc/logrotate.d/A-Box
+    backup_copy_path /etc/fail2ban/filter.d/A-Box.conf
+    backup_copy_path /etc/fail2ban/jail.d/A-Box.local
+    backup_copy_path /etc/systemd/system/xray.service
+    backup_copy_path /etc/systemd/system/sing-box.service
+    backup_copy_path /etc/systemd/system/hysteria.service
+    backup_copy_path /etc/init.d/xray
+    backup_copy_path /etc/init.d/sing-box
+    backup_copy_path /etc/init.d/hysteria
+
+    {
+        echo "A-Box backup"
+        echo "Created: $(date -Is)"
+        echo "Host: $(hostname 2>/dev/null || true)"
+        echo "Kernel: $(uname -a 2>/dev/null || true)"
+        echo "Init: ${INIT_SYS:-unknown}"
+        echo "Script SHA256: $(sha256sum "$0" 2>/dev/null | awk '{print $1}')"
+    } > "$work/meta/metadata.txt"
+    collect_abox_cron > "$work/meta/cron.abox.txt" 2>/dev/null || true
+    iptables-save > "$work/meta/iptables.snapshot" 2>/dev/null || true
+    ip6tables-save > "$work/meta/ip6tables.snapshot" 2>/dev/null || true
+
+    tarball="$backup_dir/A-Box-backup-${ts}.tar.gz"
+    tar -C "$work" -czf "$tarball" . || { rm -rf "$work"; die 'Backup tarball creation failed.'; }
+    chmod 600 "$tarball" 2>/dev/null || true
+    checksum="${tarball}.sha256"
+    sha256sum "$tarball" > "$checksum" 2>/dev/null || true
+    chmod 600 "$checksum" 2>/dev/null || true
+    rm -rf "$work"
+
+    msg "${GREEN}[*] Backup created:${NC} $tarball"
+    [[ -f "$checksum" ]] && msg "${GREEN}[*] SHA256:${NC} $checksum"
+}
+
+auto_backup_prompt() {
+    local reason="${1:-operation}" dest="${2:-$ABOX_DIR/backups}" answer
+    msg "${YELLOW}[!] Backup recommended before: ${reason}${NC}"
+    read -r -ep 'Create backup now? [Y/N]: ' answer
+    if is_yes "$answer"; then
+        backup_current_config "$dest"
+    else
+        msg "${YELLOW}[*] Backup skipped by user.${NC}"
+    fi
+}
+
+auto_backup_silent() {
+    local reason="${1:-operation}" dest="${2:-$ABOX_DIR/backups}"
+    msg "${YELLOW}[*] Auto backup before: ${reason}${NC}"
+    backup_current_config "$dest"
+}
+
+restore_from_backup() {
+    local backup_dir backups i choice selected work root checksum answer
+    backup_dir="$ABOX_DIR/backups"
+    [[ -d "$backup_dir" ]] || { msg "${RED}[!] No backup directory found: $backup_dir${NC}"; pause_return; return 0; }
+    mapfile -t backups < <(find "$backup_dir" -maxdepth 1 -type f -name 'A-Box-backup-*.tar.gz' | sort -r)
+    (( ${#backups[@]} > 0 )) || { msg "${RED}[!] No A-Box backup tarballs found.${NC}"; pause_return; return 0; }
+
+    clear
+    msg "${CYAN}======================================================================${NC}"
+    msg "${BOLD}${GREEN}Restore A-Box Backup / 恢复 A-Box 备份${NC}"
+    msg "${CYAN}======================================================================${NC}"
+    for i in "${!backups[@]}"; do
+        printf '%2d. %s\n' "$((i+1))" "${backups[$i]}"
+    done
+    msg "${GREEN} 0. Back / 返回${NC}"
+    read -r -ep 'Select backup: ' choice
+    [[ "$choice" == '0' ]] && return 0
+    [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#backups[@]} )) || { msg "${RED}[!] Invalid selection.${NC}"; pause_return; return 0; }
+    selected="${backups[$((choice-1))]}"
+
+    checksum="${selected}.sha256"
+    if [[ -f "$checksum" ]]; then
+        sha256sum -c "$checksum" >/dev/null 2>&1 || die 'Backup SHA256 verification failed.'
+    fi
+
+    msg "${YELLOW}[!] Restore will stop managed services and overwrite A-Box configuration files.${NC}"
+    read -r -ep 'Continue restore? [Y/N]: ' answer
+    is_yes "$answer" || return 0
+
+    backup_current_config
+    stop_all_managed_services
+    work=$(mktemp -d /tmp/A-Box-restore.XXXXXX) || die 'Restore temp directory creation failed.'
+    tar -xzf "$selected" -C "$work" || { rm -rf "$work"; die 'Backup extraction failed.'; }
+    root="$work/root"
+
+    restore_copy_path() {
+        local path="$1"
+        [[ -e "$root$path" ]] || return 0
+        mkdir -p "$(dirname "$path")"
+        cp -a "$root$path" "$(dirname "$path")/" 2>/dev/null || true
+    }
+
+    restore_copy_path "$ABOX_DIR"
+    restore_copy_path /usr/local/bin/sb
+    restore_copy_path /usr/local/etc/xray
+    restore_copy_path /etc/sing-box
+    restore_copy_path /etc/hysteria
+    restore_copy_path /etc/logrotate.d/A-Box
+    restore_copy_path /etc/fail2ban/filter.d/A-Box.conf
+    restore_copy_path /etc/fail2ban/jail.d/A-Box.local
+    restore_copy_path /etc/systemd/system/xray.service
+    restore_copy_path /etc/systemd/system/sing-box.service
+    restore_copy_path /etc/systemd/system/hysteria.service
+    restore_copy_path /etc/init.d/xray
+    restore_copy_path /etc/init.d/sing-box
+    restore_copy_path /etc/init.d/hysteria
+
+    [[ -d "$ABOX_DIR" ]] && chmod 700 "$ABOX_DIR" 2>/dev/null || true
+    [[ -f "$ABOX_ENV" ]] && chmod 600 "$ABOX_ENV" 2>/dev/null || true
+    [[ -x /usr/local/bin/sb ]] && chmod 755 /usr/local/bin/sb 2>/dev/null || true
+
+    if [[ -f "$work/meta/cron.abox.txt" ]]; then
+        local tmp_cron
+        tmp_cron=$(mktemp)
+        crontab -l 2>/dev/null | grep -vE '(/etc/ddr/|A-Box|geo_update|socket_probe)' > "$tmp_cron" || true
+        cat "$work/meta/cron.abox.txt" >> "$tmp_cron"
+        crontab "$tmp_cron" 2>/dev/null || true
+        rm -f "$tmp_cron"
+    fi
+
+    if [[ "${INIT_SYS:-}" == 'systemd' ]]; then
+        systemctl daemon-reload 2>/dev/null || true
+    fi
+    rm -rf "$work"
+    msg "${GREEN}[*] Restore completed. Use menu 13 to verify parameters, then start/redeploy services if needed.${NC}"
+    pause_return
+}
+
+backup_restore_menu() {
+    clear
+    msg "${CYAN}======================================================================${NC}"
+    msg "${BOLD}${GREEN}Backup / Restore / 配置备份与恢复${NC}"
+    msg "${CYAN}======================================================================${NC}"
+    if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
+        msg "${YELLOW}1. Backup current A-Box configuration${NC}"
+        msg "${YELLOW}2. Restore from backup${NC}"
+        msg "${GREEN}0. Back${NC}"
+    else
+        msg "${YELLOW}1. 备份当前 A-Box 配置${NC}"
+        msg "${YELLOW}2. 从备份恢复${NC}"
+        msg "${GREEN}0. 返回${NC}"
+    fi
+    local c
+    read -r -ep 'Select [0-2]: ' c
+    case "$c" in
+        1) backup_current_config; pause_return ;;
+        2) restore_from_backup ;;
+        *) return 0 ;;
+    esac
+}
+
+export_diagnostic_bundle() {
+    local ts diag_dir work bundle checksum safe_mode
+    ts=$(date +%Y%m%d-%H%M%S)
+    diag_dir="$ABOX_DIR/diagnostics"
+    work=$(mktemp -d /tmp/A-Box-diagnostic.XXXXXX) || die 'Diagnostic temp directory creation failed.'
+    mkdir -p "$diag_dir" "$work/logs"
+    chmod 700 "$diag_dir" 2>/dev/null || true
+
+    msg "${YELLOW}[*] Collecting diagnostic information with secret redaction...${NC}"
+    {
+        echo "A-Box diagnostic bundle"
+        echo "Created: $(date -Is)"
+        echo "Host: $(hostname 2>/dev/null || true)"
+        echo "Script: $0"
+        echo "Script SHA256: $(sha256sum "$0" 2>/dev/null | awk '{print $1}')"
+    } > "$work/summary.txt"
+
+    { uname -a 2>/dev/null; echo; cat /etc/os-release 2>/dev/null || true; echo; command -v systemctl >/dev/null 2>&1 && systemctl --version 2>/dev/null | head -n 3 || true; } > "$work/system.txt"
+    { ip addr 2>/dev/null || true; echo; ip route 2>/dev/null || true; echo; ip -6 route 2>/dev/null || true; echo; ss -lntup 2>/dev/null || true; } > "$work/network.txt"
+    { show_status_report 2>/dev/null || true; echo; for c in xray sing-box hysteria; do command -v "$c" >/dev/null 2>&1 && "$c" version 2>/dev/null | head -n 5; done; } > "$work/status.txt"
+    { iptables -S 2>/dev/null | grep 'A-Box' || true; echo; iptables -t nat -S 2>/dev/null | grep 'A-Box' || true; echo; ip6tables -S 2>/dev/null | grep 'A-Box' || true; echo; ip6tables -t nat -S 2>/dev/null | grep 'A-Box' || true; } > "$work/firewall.txt"
+    collect_abox_cron > "$work/cron.txt" 2>/dev/null || true
+    write_redacted_file "$ABOX_ENV" "$work/env.redacted"
+
+    if command -v journalctl >/dev/null 2>&1; then
+        journalctl -u xray --no-pager -n 120 2>/dev/null | redact_secrets_stream > "$work/logs/xray.journal.txt" || true
+        journalctl -u sing-box --no-pager -n 120 2>/dev/null | redact_secrets_stream > "$work/logs/sing-box.journal.txt" || true
+        journalctl -u hysteria --no-pager -n 120 2>/dev/null | redact_secrets_stream > "$work/logs/hysteria.journal.txt" || true
+    fi
+    for f in /var/log/A-Box-xray-error.log /var/log/A-Box-xray-access.log /var/log/A-Box-singbox.log /var/log/A-Box-hysteria.log; do
+        [[ -r "$f" ]] && tail -n 200 "$f" 2>/dev/null | redact_secrets_stream > "$work/logs/$(basename "$f").tail.txt" || true
+    done
+
+    bundle="$diag_dir/A-Box-diagnostic-${ts}.tar.gz"
+    tar -C "$work" -czf "$bundle" . || { rm -rf "$work"; die 'Diagnostic bundle creation failed.'; }
+    chmod 600 "$bundle" 2>/dev/null || true
+    checksum="${bundle}.sha256"
+    sha256sum "$bundle" > "$checksum" 2>/dev/null || true
+    chmod 600 "$checksum" 2>/dev/null || true
+    rm -rf "$work"
+    msg "${GREEN}[*] Diagnostic bundle:${NC} $bundle"
+    [[ -f "$checksum" ]] && msg "${GREEN}[*] SHA256:${NC} $checksum"
+    pause_return
+}
+
+light_preflight_check() {
+    local fail=0 warn=0 c
+    msg "${YELLOW}[*] Running lightweight preflight check...${NC}"
+    [[ $EUID -eq 0 ]] || { msg "${RED}[FAIL] root privilege required${NC}"; fail=$((fail+1)); }
+    [[ -t 0 ]] || { msg "${YELLOW}[WARN] no interactive TTY on stdin${NC}"; warn=$((warn+1)); }
+    if [[ -r /etc/os-release ]]; then
+        . /etc/os-release
+        case "${ID:-}" in debian|ubuntu|centos|rhel|rocky|almalinux|fedora|alpine) msg "${GREEN}[PASS] OS: ${ID:-unknown}${NC}" ;; *) msg "${YELLOW}[WARN] OS may be unsupported: ${ID:-unknown}${NC}"; warn=$((warn+1)) ;; esac
+    else
+        msg "${YELLOW}[WARN] /etc/os-release not readable${NC}"; warn=$((warn+1))
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        msg "${GREEN}[PASS] init: systemd${NC}"
+    elif command -v rc-service >/dev/null 2>&1; then
+        msg "${GREEN}[PASS] init: OpenRC${NC}"
+    else
+        msg "${RED}[FAIL] no supported init system detected${NC}"; fail=$((fail+1))
+    fi
+    case "$(uname -m)" in x86_64|amd64|aarch64|arm64|armv8*) msg "${GREEN}[PASS] arch: $(uname -m)${NC}" ;; *) msg "${RED}[FAIL] unsupported arch: $(uname -m)${NC}"; fail=$((fail+1)) ;; esac
+    for c in bash curl jq openssl unzip tar iptables ss lsof python3; do
+        command -v "$c" >/dev/null 2>&1 || { msg "${YELLOW}[WARN] command missing before dependency sync: $c${NC}"; warn=$((warn+1)); }
+    done
+    if curl -fsS --connect-timeout 3 -m 6 https://api.github.com >/dev/null 2>&1; then
+        msg "${GREEN}[PASS] GitHub API reachable${NC}"
+    else
+        msg "${YELLOW}[WARN] GitHub API unreachable now; installer may fall back to mirror${NC}"; warn=$((warn+1))
+    fi
+    if (( fail > 0 )); then
+        die "Lightweight preflight found blocking failures."
+    fi
+    msg "${GREEN}[*] Lightweight preflight completed. WARN=${warn}${NC}"
+}
+
+preflight_check() {
+    local report_dir report fail=0 warn=0 port proto holder now interactive=1
+    [[ "${1:-}" == '--no-pause' ]] && interactive=0
+    report_dir="$ABOX_DIR/preflight"
+    mkdir -p "$report_dir" 2>/dev/null || true
+    report="$report_dir/A-Box-preflight-$(date +%Y%m%d-%H%M%S).txt"
+
+    pf_pass() { printf '[PASS] %s\n' "$*" | tee -a "$report"; }
+    pf_warn() { warn=$((warn+1)); printf '[WARN] %s\n' "$*" | tee -a "$report"; }
+    pf_fail() { fail=$((fail+1)); printf '[FAIL] %s\n' "$*" | tee -a "$report"; }
+
+    : > "$report"
+    echo "A-Box preflight check: $(date -Is)" | tee -a "$report"
+    echo "----------------------------------------------------------------------" | tee -a "$report"
+
+    [[ $EUID -eq 0 ]] && pf_pass 'root privilege available' || pf_fail 'not running as root'
+    [[ -t 0 ]] && pf_pass 'interactive TTY available' || pf_warn 'no interactive TTY on stdin'
+    if [[ -r /etc/os-release ]]; then
+        . /etc/os-release
+        case "${ID:-}" in debian|ubuntu|centos|rhel|rocky|almalinux|fedora|alpine) pf_pass "supported OS detected: ${ID:-unknown}" ;; *) pf_warn "OS may be unsupported: ${ID:-unknown}" ;; esac
+    else
+        pf_warn '/etc/os-release not readable'
+    fi
+    systemd_available && pf_pass 'systemd detected' || { command -v rc-service >/dev/null 2>&1 && pf_pass 'OpenRC detected' || pf_fail 'no supported init system detected'; }
+    case "$(uname -m)" in x86_64|amd64|aarch64|arm64|armv8*) pf_pass "supported CPU architecture: $(uname -m)" ;; *) pf_fail "unsupported CPU architecture: $(uname -m)" ;; esac
+
+    for c in bash curl jq openssl bc unzip tar iptables ss lsof vnstat python3; do
+        command -v "$c" >/dev/null 2>&1 && pf_pass "command available: $c" || pf_warn "command missing before dependency sync: $c"
+    done
+
+    if curl -fsS --connect-timeout 5 -m 10 https://api.github.com >/dev/null 2>&1; then
+        pf_pass 'GitHub API reachable'
+    else
+        pf_warn 'GitHub API unreachable from this host now'
+    fi
+
+    source "$ABOX_ENV" 2>/dev/null || true
+    for proto in tcp udp; do
+        for port in 443 8443 2053 ${VLESS_PORT:-} ${XHTTP_PORT:-} ${HY2_BASE_PORT:-} ${SS_PORT:-}; do
+            [[ "$port" =~ ^[0-9]+$ ]] || continue
+            holder=$(ss -H -n -l -p -A "$proto" 2>/dev/null | grep -E "[:.]${port}\b" | grep -vE 'xray|sing-box|hysteria' || true)
+            if [[ -n "$holder" ]]; then
+                pf_warn "${port}/${proto} occupied by non-A-Box process: $(head -n 1 <<< "$holder")"
+            else
+                pf_pass "${port}/${proto} not occupied by non-A-Box process"
+            fi
+        done
+    done
+
+    managed_services_active && pf_warn 'existing A-Box managed service is active' || pf_pass 'no active A-Box managed service detected'
+    [[ -w "$ABOX_DIR" || ! -e "$ABOX_DIR" ]] && pf_pass "A-Box directory writable or creatable: $ABOX_DIR" || pf_fail "A-Box directory not writable: $ABOX_DIR"
+
+    echo "----------------------------------------------------------------------" | tee -a "$report"
+    echo "Summary: FAIL=${fail} WARN=${warn}" | tee -a "$report"
+    echo "Report: $report" | tee -a "$report"
+    if (( fail > 0 )); then
+        msg "${RED}[!] Preflight completed with blocking failures.${NC}"
+    elif (( warn > 0 )); then
+        msg "${YELLOW}[*] Preflight completed with warnings.${NC}"
+    else
+        msg "${GREEN}[*] Preflight passed.${NC}"
+    fi
+    (( interactive == 1 )) && pause_return
+    return $(( fail > 0 ? 1 : 0 ))
+}
+
+
 vps_benchmark_menu() {
     clear
     msg "${CYAN}======================================================================${NC}"
@@ -6827,6 +7229,9 @@ vps_benchmark_menu() {
         msg "${YELLOW}4. Mini host local SNI preference${NC}"
         msg "${YELLOW}5. Cloudflare WARP manager (egress IP masking / streaming unlock)${NC}"
         msg "${YELLOW}6. Allocate 2G Swap (prevent OOM crashes)${NC}"
+        msg "${YELLOW}7. Backup / Restore A-Box configuration${NC}"
+        msg "${YELLOW}8. Export redacted diagnostic bundle${NC}"
+        msg "${YELLOW}9. Full dry-run preflight check${NC}"
         msg "${GREEN}0. Back${NC}"
     else
         msg "${YELLOW}1. 本机配置和下载测速${NC}"
@@ -6835,10 +7240,13 @@ vps_benchmark_menu() {
         msg "${YELLOW}4. 微型主机本地 SNI 优选${NC}"
         msg "${YELLOW}5. Cloudflare WARP 一键接管 (出站 IP 伪装/流媒体解锁)${NC}"
         msg "${YELLOW}6. Swap 虚拟内存一键划拨 2G (防 OOM 宕机)${NC}"
+        msg "${YELLOW}7. 配置备份 / 恢复${NC}"
+        msg "${YELLOW}8. 导出脱敏诊断包${NC}"
+        msg "${YELLOW}9. 完整 Dry-run 预检查${NC}"
         msg "${GREEN}0. 返回主菜单${NC}"
     fi
     local bench_choice
-    read -r -ep 'Select [0-6]: ' bench_choice
+    read -r -ep 'Select [0-9]: ' bench_choice
     case "$bench_choice" in
         1)
             confirm_yes_no "$(printf "$(tr_msg confirm_remote)" 'System benchmark and download speed')" && run_remote_bash_script 'System benchmark and download speed' 'https://bench.sh'
@@ -6852,6 +7260,9 @@ vps_benchmark_menu() {
         4) run_local_sni_mini_benchmark ;;
         5) run_warp_manager ;;
         6) setup_swap_2g ;;
+        7) backup_restore_menu ;;
+        8) export_diagnostic_bundle ;;
+        9) preflight_check ;;
         *) return 0 ;;
     esac
 }
@@ -6866,8 +7277,8 @@ clean_uninstall_menu() {
     msg "${GREEN}0. 取消并返回${NC}"
     read -r -ep '请输入执行代码 [0-2]: ' un_choice
     case "$un_choice" in
-        1) do_cleanup full ;;
-        2) do_cleanup keep ;;
+        1) auto_backup_prompt 'full uninstall' '/root/A-Box-backups'; do_cleanup full ;;
+        2) auto_backup_prompt 'uninstall while keeping script entry' "$ABOX_DIR/backups"; do_cleanup keep ;;
         *) return 0 ;;
     esac
 }
@@ -7244,7 +7655,7 @@ show_usage() {
         cat <<'EOF_USAGE'
 [Deployment]
 1  Xray VLESS-Vision-Reality
-   TCP REALITY + Vision. Best default for long-term stealth. Port 443 defaults to www.apple.com; non-443 defaults to www.microsoft.com.
+   TCP REALITY + Vision. Best default for long-term stealth. Default REALITY SNI is www.microsoft.com. Use local SNI preference for production; avoid Apple/iCloud-like SNI on non-443 ports.
 2  Xray VLESS-XHTTP-Reality
    XHTTP over REALITY. Best high-throughput desktop path with Mihomo v1.19.24+. Recommended: stream-one + h2 + smux disabled. Non-443 SNI should be selected by local SNI preference and manually verified for TLS1.3/H2/SAN; avoid Apple/iCloud on non-443.
 3  Xray Shadowsocks-2022
@@ -7266,7 +7677,7 @@ show_usage() {
 
 [Operations]
 11 Toolbox
-   System benchmark/download speed; IP quality/streaming unlock/route test; built-in full SNI preference library; built-in mini-host SNI preference library; Cloudflare WARP manager; 2G Swap allocation.
+   System benchmark/download speed; IP quality/streaming unlock/route test; built-in full SNI preference library; built-in mini-host SNI preference library; Cloudflare WARP manager; 2G Swap allocation; Backup/Restore; redacted diagnostic bundle export; full dry-run preflight check. Lightweight preflight runs automatically before protocol deployment; backups are offered or created before destructive maintenance/core upgrade actions.
 12 VPS One-click Optimization
    BBR/FQ, file descriptor limits, KeepAlive injection, health probe, logrotate/fail2ban defense.
 13 Display Node Parameters
@@ -7312,7 +7723,7 @@ EOF_USAGE
 
 【运维类】
 11 综合工具箱
-   本机配置/下载测速；IP纯净度/流媒体解锁/回程测试；内置全量SNI优选库；内置微型主机SNI优选库；Cloudflare WARP接管；2G Swap划拨。
+   本机配置/下载测速；IP纯净度/流媒体解锁/回程测试；内置全量SNI优选库；内置微型主机SNI优选库；Cloudflare WARP接管；2G Swap划拨；配置备份/恢复；脱敏诊断包导出；完整 Dry-run 预检查。
 12 VPS 一键优化
    BBR/FQ、文件句柄、KeepAlive、健康探针、logrotate/fail2ban防御。
 13 全部节点参数显示
@@ -7337,6 +7748,31 @@ EOF_USAGE
     pause_return
 }
 
+confirm_ota_script_hash() {
+    local sha="$1" url="$2" answer
+    if [[ -n "${ABOX_OTA_SHA256_ALLOWLIST:-}" ]]; then
+        if sha256_in_allowlist "$sha" "$ABOX_OTA_SHA256_ALLOWLIST"; then
+            msg "${GREEN}[*] OTA SHA256 matched ABOX_OTA_SHA256_ALLOWLIST.${NC}"
+            return 0
+        fi
+        die "OTA SHA256 is not in ABOX_OTA_SHA256_ALLOWLIST."
+    fi
+    if [[ "${ABOX_ASSUME_YES_OTA:-}" == '1' ]]; then
+        msg "${YELLOW}[!] ABOX_ASSUME_YES_OTA=1 set; updating without interactive SHA256 confirmation.${NC}"
+        return 0
+    fi
+    if [[ "${ABOX_LANG:-zh}" == 'en' ]]; then
+        msg "${YELLOW}[!] OTA source is the main branch. A syntax/fingerprint check is not a cryptographic signature.${NC}"
+        msg "${YELLOW}[!] Source: ${url}${NC}"
+        read -r -ep 'Type YES-UPDATE-MAIN to install this downloaded script: ' answer
+    else
+        msg "${YELLOW}[!] OTA 来源为 main 分支。语法/指纹检查不是密码学签名。${NC}"
+        msg "${YELLOW}[!] 来源：${url}${NC}"
+        read -r -ep '输入 YES-UPDATE-MAIN 才安装此下载脚本: ' answer
+    fi
+    [[ "$answer" == 'YES-UPDATE-MAIN' ]] || return 130
+}
+
 update_script() {
     clear
     local OTA_URL='https://raw.githubusercontent.com/alariclin/a-box/main/install.sh' tmp_update sha
@@ -7346,6 +7782,7 @@ update_script() {
         sha=$(sha256sum "$tmp_update" | awk '{print $1}')
         msg "${YELLOW}[*] OTA SHA256: ${sha}${NC}"
         if bash -n "$tmp_update" && grep -q '==============================A-Box===============================' "$tmp_update"; then
+            confirm_ota_script_hash "$sha" "$OTA_URL" || { rm -f "$tmp_update"; msg "${YELLOW}[*] OTA update canceled.${NC}"; pause_return; return 0; }
             install -m 755 "$tmp_update" "$ABOX_DIR/A-Box.sh"
             rm -f "$tmp_update"
             msg "${GREEN}核心代码热更新完毕。${NC}"
@@ -7539,6 +7976,7 @@ upgrade_current_cores_only() {
     msg "It downloads GitHub latest release assets, validates the current config where supported, restarts only active services, and rolls back the binary if validation/restart fails."
     read -r -ep 'Continue core-only upgrade? [Y/N]: ' answer
     is_yes "$answer" || { msg "${YELLOW}Canceled.${NC}"; pause_return; return 0; }
+    auto_backup_silent 'core-only upgrade' "$ABOX_DIR/backups"
     for t in "${targets[@]}"; do
         case "$t" in
             xray) upgrade_xray_core_only ;;
@@ -7605,6 +8043,8 @@ Usage:
   bash A-Box.sh --lang en          Use English UI / 设置英文并启动
   bash A-Box.sh --self-test        运行无副作用静态自测 / Run static self-test
   bash A-Box.sh --status           显示当前配置和服务状态 / Show current status
+  bash A-Box.sh --preflight        运行完整预检查 / Run full dry-run preflight check
+  bash A-Box.sh --dry-run          同 --preflight / Alias of --preflight
   bash A-Box.sh --help             显示命令行帮助 / Show help
 EOF_HELP
 }
@@ -7649,10 +8089,15 @@ run_self_tests() {
     assert_bad valid_ipv4_cidr 999.0.2.1/24
     assert_ok valid_ipv6_cidr 2001:db8::1/64
     assert_bad valid_ipv6_cidr 2001:::1/64
+    declare -F backup_current_config >/dev/null 2>&1 || { echo 'FAIL: backup_current_config missing'; failures=$((failures + 1)); }
+    declare -F export_diagnostic_bundle >/dev/null 2>&1 || { echo 'FAIL: export_diagnostic_bundle missing'; failures=$((failures + 1)); }
+    declare -F preflight_check >/dev/null 2>&1 || { echo 'FAIL: preflight_check missing'; failures=$((failures + 1)); }
+    declare -F confirm_remote_script_hash >/dev/null 2>&1 || { echo 'FAIL: remote script hash gate missing'; failures=$((failures + 1)); }
+    declare -F confirm_ota_script_hash >/dev/null 2>&1 || { echo 'FAIL: OTA hash gate missing'; failures=$((failures + 1)); }
 
     UUID=00000000-0000-4000-8000-000000000000
     VLESS_SNI=www.example.com
-    VISION_SNI=www.apple.com
+    VISION_SNI=www.microsoft.com
     XHTTP_SNI=www.microsoft.com
     VLESS_PORT=8443
     XHTTP_PORT=9443
@@ -7672,8 +8117,13 @@ run_self_tests() {
     mkdir -p "$tmp/xray" "$tmp/sing-box"
     XRAY_CONFIG_PATH="$tmp/xray/config.json" build_xray_config ALL
     jq empty "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: build_xray_config JSON'; failures=$((failures + 1)); }
+    local saved_vision_sni="$VISION_SNI" saved_vless_sni="$VLESS_SNI"
+    unset VISION_SNI VLESS_SNI
+    XRAY_CONFIG_PATH="$tmp/xray/default-sni.json" build_xray_config VISION
+    jq -e '.inbounds[] | select(.protocol=="vless" and .streamSettings.realitySettings.serverNames[0]=="www.microsoft.com")' "$tmp/xray/default-sni.json" >/dev/null 2>&1 || { echo 'FAIL: default REALITY SNI must be www.microsoft.com'; failures=$((failures + 1)); }
+    VISION_SNI="$saved_vision_sni" VLESS_SNI="$saved_vless_sni"
     jq -e '.inbounds[] | select(.protocol=="shadowsocks" and .port==2053 and .settings.network=="tcp,udp")' "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: Xray SS-2022 2053 tcp,udp'; failures=$((failures + 1)); }
-    jq -e '.inbounds[] | select(.protocol=="vless" and .port==8443 and .streamSettings.realitySettings.serverNames[0]=="www.apple.com")' "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: Xray Vision SNI split'; failures=$((failures + 1)); }
+    jq -e '.inbounds[] | select(.protocol=="vless" and .port==8443 and .streamSettings.realitySettings.serverNames[0]=="www.microsoft.com")' "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: Xray Vision SNI split'; failures=$((failures + 1)); }
     jq -e '.inbounds[] | select(.protocol=="vless" and .port==9443 and .streamSettings.realitySettings.serverNames[0]=="www.microsoft.com")' "$tmp/xray/config.json" >/dev/null 2>&1 || { echo 'FAIL: Xray XHTTP SNI split'; failures=$((failures + 1)); }
     SINGBOX_CONFIG_PATH="$tmp/sing-box/config.json" build_singbox_config ALL
     jq empty "$tmp/sing-box/config.json" >/dev/null 2>&1 || { echo 'FAIL: build_singbox_config JSON'; failures=$((failures + 1)); }
@@ -7699,6 +8149,7 @@ main() {
         --help|-h) show_cli_help; exit 0 ;;
         --self-test) run_self_tests; exit $? ;;
         --status) show_status_report; exit 0 ;;
+        --preflight|--dry-run) detect_lang; mkdir -p "$ABOX_DIR"; preflight_check --no-pause; exit $? ;;
         --lang)
             ABOX_LANG_OVERRIDE="${2:-zh}"
             enter_runtime "$@"
